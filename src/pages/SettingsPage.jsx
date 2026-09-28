@@ -16,6 +16,7 @@ import {
 } from '../components/ui/primitives';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import PermissionAlert from '../components/PermissionAlert';
+import { planFilamentImport } from '../features/materials/firebaseImport';
 import { buildBackup, downloadBackup, readFileAsText, validateBackup } from '../data/backup';
 import { DISCOUNT_MODE, WASTE_MODE } from '../core/pricing';
 import { formatCents, toCents } from '../core/money';
@@ -140,20 +141,25 @@ export default function SettingsPage() {
         return;
       }
 
+      const { pending, skipped } = planFilamentImport(filaments, state.materials);
+
+      if (pending.length === 0) {
+        toast.info('Todos os filamentos do Firebase já estão cadastrados como materiais.');
+        return;
+      }
+
       let imported = 0;
-      for (const filament of filaments) {
-        const saved = await actions.saveMaterial({
-          name: filament.name,
-          type: filament.type || 'PLA',
-          colorHex: Array.isArray(filament.colors) ? filament.colors[0] : filament.color,
-          spoolGrams: inputToNumber(filament.weight, 1000),
-          priceCents: toCents(filament.price),
-          shippingCents: 0,
-          notes: 'Importado do Firebase.',
-        });
+      for (const material of pending) {
+        // `silent` evita um aviso por registro: o resumo vem no fim.
+        const saved = await actions.saveMaterial(material, { silent: true });
         if (saved) imported += 1;
       }
-      toast.success(`${imported} ${imported === 1 ? 'material' : 'materiais'} importados do Firebase.`);
+
+      toast.success(
+        `${imported} ${imported === 1 ? 'material' : 'materiais'} importados do Firebase.` +
+          (skipped > 0 ? ` ${skipped} já existiam e foram ignorados.` : ''),
+        { title: 'Importação concluída' },
+      );
     } catch (error) {
       if (error?.code === 'permission-denied' || /permission/i.test(error?.message || '')) {
         setShowFirebaseAlert(true);

@@ -39,8 +39,12 @@ export function StoreProvider({ children }) {
 
   const actions = useMemo(
     () => ({
-      saveMaterial: (material) =>
-        run(() => db.put(COLLECTIONS.MATERIALS, material), 'Material salvo.'),
+      /**
+       * `silent` suprime o aviso individual: operações em lote (importação)
+       * relatam um resumo só no fim, em vez de um aviso por registro.
+       */
+      saveMaterial: (material, { silent = false } = {}) =>
+        run(() => db.put(COLLECTIONS.MATERIALS, material), silent ? null : 'Material salvo.'),
       deleteMaterial: (id) => run(() => db.remove(COLLECTIONS.MATERIALS, id), 'Material excluído.'),
       duplicateMaterial: (id, name) =>
         run(() => db.duplicate(COLLECTIONS.MATERIALS, id, { name }), 'Material duplicado.'),
