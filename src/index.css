@@ -1,43 +1,85 @@
-    @tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
   body {
-    @apply bg-black text-gray-200 font-sans;
-    font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    @apply bg-ink-950 text-gray-200 font-sans antialiased;
+  }
+
+  /* Remove as setinhas dos campos numéricos: os valores são financeiros e a
+     digitação é sempre mais rápida que o incremento de 1 em 1. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-ink-700;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-600;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-blue/60 ring-offset-2 ring-offset-ink-950;
   }
 }
 
-@layer utilities {
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+@layer components {
+  .card {
+    @apply rounded-card border border-ink-700 bg-ink-900/80 shadow-card;
   }
 
-  @keyframes slideIn {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
+  .field-input {
+    @apply w-full rounded-lg border border-ink-700 bg-ink-850 px-3 py-2.5 text-sm text-gray-100
+      placeholder:text-ink-500 transition-colors
+      focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/25
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
-  .animate-fadeIn {
-    animation: fadeIn 0.5s ease-out;
+  .field-input-invalid {
+    @apply border-negative/70 focus:border-negative focus:ring-negative/25;
   }
 
-  .animate-slideIn {
-    animation: slideIn 0.3s ease-out;
+  .nav-link {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400
+      transition-colors hover:bg-ink-800 hover:text-gray-100;
+  }
+
+  .nav-link-active {
+    @apply bg-brand-gradient-soft text-gray-50 ring-1 ring-inset ring-brand-blue/30;
   }
 }
 
+/* O PDF é gerado em uma janela própria; aqui garantimos que nada da aplicação
+   apareça caso o usuário mande imprimir a página inteira. */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

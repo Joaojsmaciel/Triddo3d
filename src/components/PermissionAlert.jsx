@@ -1,68 +1,72 @@
 import React from 'react';
+import Icon from './ui/Icon';
+import { Button, Modal } from './ui/primitives';
 
-const PermissionAlert = ({ onDismiss }) => {
+/**
+ * Instruções para liberar as regras do Firestore.
+ *
+ * Aparece somente na importação dos filamentos da versão anterior, quando o
+ * Firebase recusa a leitura por falta de permissão.
+ */
+export default function PermissionAlert({ onDismiss }) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border-2 border-red-500 rounded-2xl p-6 max-w-2xl w-full shadow-2xl">
-        <div className="flex items-start gap-4">
-          <div className="text-red-500 text-3xl">
-            <i className="fas fa-exclamation-triangle"></i>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-xl font-bold text-red-500 mb-3">
-              Erro de Permissões do Firestore
-            </h3>
-            <p className="text-gray-200 mb-4">
-              O Firestore precisa ter as regras de segurança configuradas para permitir leitura e escrita.
-            </p>
-            <div className="bg-gray-800 rounded-lg p-4 mb-4">
-              <p className="text-gray-300 text-sm font-semibold mb-2">
-                Siga estes passos para corrigir:
-              </p>
-              <ol className="list-decimal list-inside text-gray-300 text-sm space-y-2">
-                <li>Acesse o <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:underline">Firebase Console</a></li>
-                <li>Selecione seu projeto: <strong className="text-white">triddo-eeb4d</strong></li>
-                <li>Vá em <strong className="text-white">Firestore Database</strong> → <strong className="text-white">Rules</strong></li>
-                <li>Cole as seguintes regras:</li>
-              </ol>
-            </div>
-            <div className="bg-black rounded-lg p-4 mb-4 overflow-x-auto">
-              <pre className="text-green-400 text-xs">
-{`rules_version = '2';
+    <Modal
+      open
+      onClose={onDismiss}
+      title="Firestore sem permissão de leitura"
+      subtitle="As regras de segurança do projeto estão bloqueando o acesso aos filamentos antigos."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onDismiss}>
+            Fechar
+          </Button>
+          <a
+            href="https://console.firebase.google.com/project/triddo-eeb4d/firestore/rules"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="primary" icon="arrowLeft">
+              Abrir Firebase Console
+            </Button>
+          </a>
+        </>
+      }
+    >
+      <ol className="mb-4 list-inside list-decimal space-y-2 text-sm text-gray-300">
+        <li>
+          Acesse o{' '}
+          <a
+            href="https://console.firebase.google.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-blue hover:underline"
+          >
+            Firebase Console
+          </a>{' '}
+          e selecione o projeto <strong className="text-gray-100">triddo-eeb4d</strong>.
+        </li>
+        <li>
+          Abra <strong className="text-gray-100">Firestore Database → Rules</strong>.
+        </li>
+        <li>Publique as regras abaixo e tente a importação novamente.</li>
+      </ol>
+
+      <pre className="overflow-x-auto rounded-lg border border-ink-700 bg-ink-950 p-4 text-xs text-positive">
+        {`rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /filaments/{filamentId} {
-      allow read, write: if true;
+      allow read: if true;
     }
   }
 }`}
-              </pre>
-            </div>
-            <p className="text-yellow-400 text-sm mb-4">
-              ⚠️ <strong>Atenção:</strong> Essas regras permitem acesso total. Para produção, configure autenticação e regras mais restritivas.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={onDismiss}
-                className="px-4 py-2 bg-brand-blue text-white rounded-lg font-semibold hover:bg-brand-blue-600 transition-colors"
-              >
-                Entendi, vou configurar
-              </button>
-              <a
-                href="https://console.firebase.google.com/project/triddo-eeb4d/firestore/rules"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg font-semibold hover:bg-gray-600 transition-colors inline-block"
-              >
-                Abrir Firebase Console
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      </pre>
+
+      <p className="mt-4 flex items-start gap-2 text-xs text-warning">
+        <Icon name="alert" size={14} className="mt-0.5" />
+        Essas regras liberam a leitura pública da coleção. Depois de importar, volte a restringi-las — o
+        TRIDDO 3D passa a guardar os dados neste navegador e não depende mais do Firebase.
+      </p>
+    </Modal>
   );
-};
-
-export default PermissionAlert;
-
+}
