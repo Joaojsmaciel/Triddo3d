@@ -183,6 +183,25 @@ describe('custos adicionais', () => {
       context,
     );
     assert.equal(result.perUnit.extras, 0);
+    assert.deepEqual(result.extraItems, []);
+  });
+
+  it('lista cada adicional com rótulo para o orçamento do cliente', () => {
+    const result = calculatePricing(
+      baseInput({
+        extras: [
+          { label: 'Modelagem 3D', amountCents: 5000, perUnit: true },
+          { label: 'Cola, tinta e consumíveis', amountCents: 300, perUnit: true },
+          { label: 'Vazio', amountCents: 0, perUnit: true },
+        ],
+      }),
+      context,
+    );
+
+    assert.deepEqual(result.extraItems, [
+      { label: 'Modelagem 3D', amountCents: 5000, perUnit: true },
+      { label: 'Cola, tinta e consumíveis', amountCents: 300, perUnit: true },
+    ]);
   });
 });
 
@@ -293,14 +312,13 @@ describe('desconto', () => {
 });
 
 describe('valor mínimo de venda', () => {
-  it('eleva o preço até o mínimo configurado', () => {
+  it('avisa quando o preço fica abaixo do mínimo, sem alterar o valor sugerido', () => {
     const result = calculatePricing(
       baseInput({ marginPercent: 0, minPriceCents: 5000 }),
       context,
     );
 
-    assert.equal(result.perUnit.price, 5000);
-    assert.equal(result.perUnit.profit, 2430);
+    assert.equal(result.perUnit.price, BASE_TOTAL_COST);
     assert.equal(result.minPriceApplied, true);
     assert.ok(warningCodes(result).includes('min-price'));
   });
@@ -313,6 +331,38 @@ describe('valor mínimo de venda', () => {
 
     assert.equal(result.perUnit.price, 3671);
     assert.equal(result.minPriceApplied, false);
+  });
+
+  it('reduzir a margem muda o preço mesmo com valor mínimo configurado', () => {
+    const high = calculatePricing(baseInput({ marginPercent: 30, minPriceCents: 1500 }), context);
+    const low = calculatePricing(baseInput({ marginPercent: 10, minPriceCents: 1500 }), context);
+
+    assert.ok(low.perUnit.price < high.perUnit.price);
+  });
+});
+
+describe('preço cobrado manualmente', () => {
+  it('substitui o preço sugerido pelo valor digitado', () => {
+    const suggested = calculatePricing(baseInput({ marginPercent: 30 }), context);
+    const result = calculatePricing(
+      baseInput({ marginPercent: 30, priceOverrideCents: 2000 }),
+      context,
+    );
+
+    assert.equal(result.perUnit.price, 2000);
+    assert.equal(result.priceOverridden, true);
+    assert.equal(result.suggestedPrice, suggested.perUnit.price);
+    assert.equal(result.perUnit.listPrice, 2000);
+    assert.equal(result.perUnit.discount, 0);
+  });
+
+  it('recalcula o lucro sobre o valor cobrado', () => {
+    const result = calculatePricing(
+      baseInput({ marginPercent: 30, priceOverrideCents: 4000 }),
+      context,
+    );
+
+    assert.equal(result.perUnit.profit, 4000 - BASE_TOTAL_COST);
   });
 });
 

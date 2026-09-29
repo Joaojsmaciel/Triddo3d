@@ -71,6 +71,8 @@ export default function PricingPage({ params, navigate }) {
 
   const set = (field) => (value) => setForm((current) => ({ ...current, [field]: value }));
   const setEvent = (field) => (event) => set(field)(event.target.value);
+  const setMargin = (value) =>
+    setForm((current) => ({ ...current, marginPercent: value, priceOverride: '' }));
 
   const material = materials.find((item) => item.id === form.materialId) || null;
   const printer = printers.find((item) => item.id === form.printerId) || null;
@@ -525,7 +527,7 @@ export default function PricingPage({ params, navigate }) {
                   label="Margem de lucro desejada"
                   suffix="%"
                   value={form.marginPercent}
-                  onChange={set('marginPercent')}
+                  onChange={setMargin}
                   error={errorFor('marginPercent')}
                 />
                 {isQuick ? null : (
@@ -615,7 +617,9 @@ export default function PricingPage({ params, navigate }) {
             result={result}
             quantity={quantity}
             marginPercent={Number(form.marginPercent) || 0}
-            onMarginChange={set('marginPercent')}
+            onMarginChange={setMargin}
+            priceOverride={form.priceOverride}
+            onPriceOverrideChange={set('priceOverride')}
           />
 
           {result.ok ? (

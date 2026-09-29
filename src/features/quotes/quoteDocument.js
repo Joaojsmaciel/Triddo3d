@@ -7,14 +7,14 @@
  * a fonte e o tamanho de papel configurados na máquina.
  *
  * O documento do cliente mostra a descrição do serviço, as especificações
- * técnicas (peso e tempo) e o preço. Mão de obra, custo de máquina, depreciação,
- * manutenção, reserva para falhas, lucro e margem nunca aparecem.
+ * técnicas (peso e tempo) e o preço. Quando existirem, lista depreciação e
+ * custos adicionais (modelagem, cola, tinta, embalagem).
  *
- * O custo do filamento é o único custo que pode ser exibido, e só quando
- * `company.quoteShowMaterialCost` estiver ligado em Configurações.
+ * Custo de filamento, mão de obra, custo de máquina, manutenção, reserva para
+ * falhas, lucro e margem nunca aparecem — nem se uma configuração antiga pedir.
  */
 
-import { formatCents, formatNumber } from '../../core/money.js';
+import { formatCents, formatNumber, toCents } from '../../core/money.js';
 import { QUOTE_STATUS_LABELS } from '../../core/reports.js';
 import { formatHours } from '../../core/units.js';
 import { formatDate } from '../../lib/form.js';
@@ -64,7 +64,7 @@ function brandName(name) {
  * (uma das linhas carrega marcação própria). Ao acrescentar qualquer texto vindo
  * do usuário, passe por `escapeHtml` nesta função.
  */
-function buildSpecs(quote, company) {
+function buildSpecs(quote) {
   const unit = quote.unit || {};
   const totals = quote.totals || {};
   const multiple = quote.quantity > 1;
@@ -108,12 +108,57 @@ function buildSpecs(quote, company) {
     }
   }
 
-  if (company.quoteShowMaterialCost) {
-    const materialCost = Number(totals.material) || 0;
-    if (materialCost > 0) {
-      rows.push(['Custo do filamento', formatCents(materialCost)]);
-    }
+  return rows;
+}
+
+const FILAMENT_COST_LABEL = /filamento|custo do material/i;
+
+function extraItemsFromQuote(quote) {
+  if (Array.isArray(quote.extraItems)) {
+    return quote.extraItems;
   }
+
+  const extras = quote.input?.extras;
+  if (!Array.isArray(extras)) return [];
+
+  return extras.map((extra) => ({
+    label: extra.label || 'Custo adicional',
+    amountCents: extra.amountCents ?? toCents(extra.amount),
+    perUnit: extra.perUnit !== false,
+  }));
+}
+
+function extraLoteCents(item, quantity) {
+  const amount = Number(item.amountCents) || 0;
+  if (amount <= 0) return 0;
+  if (item.perUnit === false) return amount;
+  return amount * Math.max(1, Number(quantity) || 1);
+}
+
+/**
+ * Custos que o cliente pode ver: depreciação e adicionais lançados (modelagem,
+ * cola, tinta, etc.). Filamento nunca entra, mesmo em orçamentos antigos.
+ */
+function buildClientCostRows(quote) {
+  const rows = [];
+  const totals = quote.totals || {};
+  const unit = quote.unit || {};
+
+  const depreciation = Number(totals.depreciation) || 0;
+  const fallbackDepreciation =
+    depreciation > 0 ? depreciation : (Number(unit.depreciation) || 0) * Math.max(1, Number(quote.quantity) || 1);
+
+  if (fallbackDepreciation > 0) {
+    rows.push(['Depreciação', formatCents(fallbackDepreciation)]);
+  }
+
+  extraItemsFromQuote(quote).forEach((extra) => {
+    const label = String(extra.label || '').trim() || 'Custo adicional';
+    if (FILAMENT_COST_LABEL.test(label)) return;
+    const lote = extraLoteCents(extra, quote.quantity);
+    if (lote <= 0) return;
+    rows.push([label, formatCents(lote)]);
+  });
 
   return rows;
 }
@@ -137,7 +182,8 @@ export function buildQuoteHtml(quote, company = {}) {
     .map((line) => escapeHtml(line))
     .join(' &nbsp;·&nbsp; ');
 
-  const specs = company.quoteShowSpecs === false ? [] : buildSpecs(quote, company);
+  const specs = company.quoteShowSpecs === false ? [] : buildSpecs(quote);
+  const costRows = company.quoteShowSpecs === false ? [] : buildClientCostRows(quote);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -252,6 +298,20 @@ export function buildQuoteHtml(quote, company = {}) {
     <div class="specs-title">Especificações técnicas</div>
     <div class="specs-body">
       ${specs
+        .map(
+          ([label, value]) =>
+            `<div class="specs-row"><span>${escapeHtml(label)}</span><span>${value}</span></div>`,
+        )
+        .join('\n      ')}
+    </div>
+  </div>`
+    : ''}
+
+  ${costRows.length
+    ? `<div class="specs">
+    <div class="specs-title">Custos do serviço</div>
+    <div class="specs-body">
+      ${costRows
         .map(
           ([label, value]) =>
             `<div class="specs-row"><span>${escapeHtml(label)}</span><span>${value}</span></div>`,

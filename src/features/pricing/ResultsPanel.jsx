@@ -10,6 +10,7 @@ import {
   Slider,
 } from '../../components/ui/primitives';
 import DonutChart from '../../components/charts/DonutChart';
+import Icon from '../../components/ui/Icon';
 import { formatCents, formatRatioAsPercent, fromCents } from '../../core/money';
 import { formatHours } from '../../core/units';
 
@@ -17,7 +18,14 @@ import { formatHours } from '../../core/units';
  * Resultados da precificação: composição de custos, preço destacado e o controle
  * de margem que atualiza preço e lucro imediatamente.
  */
-export default function ResultsPanel({ result, quantity, marginPercent, onMarginChange }) {
+export default function ResultsPanel({
+  result,
+  quantity,
+  marginPercent,
+  onMarginChange,
+  priceOverride = '',
+  onPriceOverrideChange,
+}) {
   if (!result?.ok) {
     return (
       <Card>
@@ -38,6 +46,11 @@ export default function ResultsPanel({ result, quantity, marginPercent, onMargin
   const { perUnit, batch, breakdown, effectiveMargin, targetMargin } = result;
   const isBatch = quantity > 1;
   const marginGap = targetMargin - effectiveMargin;
+  const overridden = Boolean(result.priceOverridden);
+  const suggestedPrice = result.suggestedPrice ?? perUnit.price;
+  const suggestedDisplay = fromCents(perUnit.price).toFixed(2).replace('.', ',');
+  const priceValue =
+    priceOverride === '' || priceOverride == null ? suggestedDisplay : priceOverride;
 
   const chartData = breakdown.map((item) => ({
     key: item.key,
@@ -54,11 +67,37 @@ export default function ResultsPanel({ result, quantity, marginPercent, onMargin
       <Card className="overflow-hidden">
         <div className="bg-brand-gradient p-5 text-white">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/75">
-            Preço de venda sugerido {isBatch ? '· por peça' : ''}
+            {overridden ? 'Preço cobrado' : 'Preço de venda'}
+            {isBatch ? ' · por peça' : ''}
           </p>
-          <p className="mt-1 text-4xl font-extrabold tabular-nums leading-none">
-            {formatCents(perUnit.price)}
+          <label className="mt-3 flex cursor-text items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-ink-950 shadow-lg">
+            <Icon name="edit" size={16} className="shrink-0 text-brand-blue" />
+            <span className="text-lg font-bold text-ink-500">R$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              aria-label="Editar preço de venda"
+              value={priceValue}
+              onChange={(event) => onPriceOverrideChange?.(event.target.value)}
+              placeholder="0,00"
+              className="w-full min-w-0 bg-transparent text-3xl font-extrabold tabular-nums leading-none text-ink-950 caret-brand-blue outline-none"
+            />
+          </label>
+          <p className="mt-2 text-xs text-white/80">
+            {overridden
+              ? `Você editou o valor. Sugerido pela margem: ${formatCents(suggestedPrice)}.`
+              : 'Campo editável — clique e digite o valor que quer cobrar.'}
           </p>
+
+          {overridden ? (
+            <button
+              type="button"
+              onClick={() => onPriceOverrideChange?.('')}
+              className="mt-2 text-xs font-semibold text-white underline decoration-white/50 underline-offset-2 hover:decoration-white"
+            >
+              Voltar ao preço sugerido
+            </button>
+          ) : null}
 
           {perUnit.discount > 0 ? (
             <p className="mt-2 text-sm text-white/80">

@@ -94,6 +94,8 @@ export function createEmptyPricingInput() {
     discountPercent: 0,
     discountMode: DISCOUNT_MODE.ABSORB,
     minPriceCents: 0,
+    /** 0 = cobra o preço sugerido pela fórmula. Qualquer valor > 0 substitui. */
+    priceOverrideCents: 0,
 
     notes: '',
   };
@@ -153,6 +155,7 @@ function normalizeInput(raw, material, printer) {
       : DISCOUNT_MODE.ABSORB,
     fixedFeeCents: Math.max(0, asCents(raw.fixedFeeCents)),
     minPriceCents: Math.max(0, asCents(raw.minPriceCents)),
+    priceOverrideCents: Math.max(0, asCents(raw.priceOverrideCents)),
   };
 }
 
@@ -166,6 +169,22 @@ function sumExtrasPerUnit(extras, quantity) {
     if (!value) return total;
     return total + (extra?.perUnit === false ? value / quantity : value);
   }, 0);
+}
+
+/** Itens de custo adicional com valor, no formato em que o usuário lançou. */
+function listExtraItems(extras) {
+  return (Array.isArray(extras) ? extras : [])
+    .map((extra) => {
+      const amountCents = asCents(extra?.amountCents);
+      if (amountCents <= 0) return null;
+      const label = String(extra?.label || '').trim() || 'Custo adicional';
+      return {
+        label,
+        amountCents,
+        perUnit: extra?.perUnit !== false,
+      };
+    })
+    .filter(Boolean);
 }
 
 function validate(input, material, printer, raw) {
@@ -229,7 +248,19 @@ export function calculatePricing(raw = {}, context = {}) {
   const { errors, divisor } = validate(input, materialDoc, printerDoc, base);
 
   if (errors.length > 0) {
-    return { ok: false, errors, warnings: [], input, perUnit: null, batch: null, breakdown: [] };
+    return {
+      ok: false,
+      errors,
+      warnings: [],
+      input,
+      perUnit: null,
+      batch: null,
+      breakdown: [],
+      extraItems: [],
+      formulaPrice: 0,
+      suggestedPrice: 0,
+      priceOverridden: false,
+    };
   }
 
   const warnings = [];
@@ -242,6 +273,7 @@ export function calculatePricing(raw = {}, context = {}) {
   const depreciation = roundCents(input.printHours * input.depreciationPerHour);
   const maintenance = roundCents(input.printHours * input.maintenancePerHour);
   const labor = roundCents(input.laborHours * input.laborRate);
+  const extraItems = listExtraItems(input.extras);
   const extras = roundCents(sumExtrasPerUnit(input.extras, quantity));
 
   const directCost = sumCents(material, energy, depreciation, maintenance, labor, extras);
@@ -268,14 +300,27 @@ export function calculatePricing(raw = {}, context = {}) {
 
   let discount = roundCents(listPrice * input.discountRatio);
   let price = listPrice - discount;
+  const formulaPrice = price;
 
+  // O piso de venda avisa, mas não segura o preço sugerido: se prendesse o valor
+  // no mínimo, reduzir a margem não mudaria o que aparece na tela.
   let minPriceApplied = false;
   if (input.minPriceCents > 0 && price < input.minPriceCents) {
-    price = input.minPriceCents;
-    listPrice = Math.max(listPrice, price);
-    discount = listPrice - price;
     minPriceApplied = true;
   }
+
+  let priceOverridden = false;
+  if (input.priceOverrideCents > 0) {
+    // O valor digitado é o que o cliente paga. Desconto e tabela da fórmula
+    // deixam de se aplicar — quem cobra escolheu o número final.
+    price = input.priceOverrideCents;
+    listPrice = price;
+    discount = 0;
+    priceOverridden = true;
+    minPriceApplied = input.minPriceCents > 0 && price < input.minPriceCents;
+  }
+
+  const suggestedPrice = formulaPrice;
 
   // --- Resultado real, medido sobre o preço efetivamente cobrado -------------
   // Taxas percentuais e impostos incidem sobre o valor recebido do cliente —
@@ -304,7 +349,8 @@ export function calculatePricing(raw = {}, context = {}) {
   if (minPriceApplied) {
     warnings.push({
       code: 'min-price',
-      message: 'O preço calculado ficou abaixo do valor mínimo de venda e foi elevado até ele.',
+      message:
+        'O preço ficou abaixo do valor mínimo de venda. Edite o valor cobrado se quiser respeitar o piso.',
     });
   }
   if (input.discountRatio > 0 && input.discountMode === DISCOUNT_MODE.ABSORB) {
@@ -382,8 +428,12 @@ export function calculatePricing(raw = {}, context = {}) {
     perUnit,
     batch,
     breakdown,
+    extraItems,
+    formulaPrice,
+    suggestedPrice,
     effectiveMargin,
     targetMargin: input.marginRatio,
     minPriceApplied,
+    priceOverridden,
   };
 }

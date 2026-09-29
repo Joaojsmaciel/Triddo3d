@@ -60,11 +60,11 @@ export function defaultSettings() {
       quoteFooter: 'Orçamento sujeito a alteração após o prazo de validade.',
 
       /**
-       * Quanto o PDF do cliente revela. Mão de obra, máquina, depreciação,
-       * reserva, lucro e margem ficam fora do documento em qualquer combinação.
+       * O PDF do cliente mostra especificações técnicas e, quando existirem,
+       * depreciação e custos adicionais (modelagem, cola, tinta). Custo de
+       * filamento, mão de obra, manutenção, reserva, lucro e margem ficam fora.
        */
       quoteShowSpecs: true,
-      quoteShowMaterialCost: true,
     },
   };
 }
@@ -127,8 +127,11 @@ export function createQuote(patch = {}) {
     unit: patch.unit ?? null,
     /** Resultado do lote (peça x quantidade). */
     totals: patch.totals ?? null,
+    /** Custos adicionais lançados, para o PDF listar rótulo a rótulo. */
+    extraItems: Array.isArray(patch.extraItems) ? patch.extraItems : null,
     marginPercent: parseDecimal(patch.marginPercent, 0),
     effectiveMargin: parseDecimal(patch.effectiveMargin, 0),
+    priceOverridden: Boolean(patch.priceOverridden),
 
     notes: patch.notes ?? '',
     createdAt: patch.createdAt || new Date().toISOString(),

@@ -14,7 +14,6 @@ const company = {
   quoteValidityDays: 7,
   quoteFooter: 'Orçamento sujeito a alteração após o prazo.',
   quoteShowSpecs: true,
-  quoteShowMaterialCost: true,
 };
 
 const quote = {
@@ -32,10 +31,12 @@ const quote = {
   effectiveMargin: 0.3,
   unit: {
     price: 3856,
+    listPrice: 3856,
     totalCost: 2699,
     profit: 1157,
     material: 1400,
     labor: 833,
+    depreciation: 140,
     grams: 100,
     billableGrams: 100,
     printHours: 5,
@@ -48,11 +49,16 @@ const quote = {
     profit: 3471,
     material: 4200,
     labor: 2499,
+    depreciation: 420,
     failureReserve: 387,
     grams: 300,
     billableGrams: 300,
     printHours: 15,
   },
+  extraItems: [
+    { label: 'Modelagem 3D', amountCents: 5000, perUnit: true },
+    { label: 'Cola, tinta e consumíveis', amountCents: 250, perUnit: true },
+  ],
 };
 
 /** Documento de referência: orçamento completo com todas as opções ligadas. */
@@ -82,28 +88,28 @@ describe('buildQuoteHtml', () => {
       '34,71', // lucro do lote
       '24,99', // mão de obra
       '3,87', // reserva para falhas
+      '42,00', // custo de filamento do lote
+      '14,00', // custo de filamento por peça
     ];
     forbidden.forEach((value) => {
       assert.ok(!html.includes(value), `o PDF do cliente não deveria conter ${value}`);
     });
 
-    [/margem/i, /lucro/i, /m[ãa]o de obra/i, /deprecia/i, /manuten/i, /reserva/i, /falha/i].forEach(
+    [/margem/i, /lucro/i, /m[ãa]o de obra/i, /manuten/i, /reserva/i, /falha/i].forEach(
       (pattern) => {
         assert.ok(!pattern.test(html), `o PDF do cliente não deveria mencionar ${pattern}`);
       },
     );
   });
 
-  it('não expõe o custo total, mesmo mostrando o do filamento', () => {
-    // "Custo" aparece só na linha do filamento; o custo total segue oculto.
-    const ocorrencias = html.match(/Custo/gi) || [];
-    assert.equal(ocorrencias.length, 1);
-    assert.match(html, /Custo do filamento/);
+  it('nunca mostra o custo do filamento', () => {
+    assert.ok(!/Custo do filamento/.test(html));
+    assert.ok(!html.includes('42,00'));
   });
 });
 
 describe('buildQuoteHtml · especificações técnicas', () => {
-  it('mostra peso, tempo e custo do filamento', () => {
+  it('mostra peso e tempo, sem o custo do filamento', () => {
     const html = buildQuoteHtml(quote, company);
 
     assert.match(html, /Especificações técnicas/);
@@ -111,8 +117,8 @@ describe('buildQuoteHtml · especificações técnicas', () => {
     assert.match(html, /Creality Ender 3 V3 SE/);
     assert.match(html, /Peso da peça/);
     assert.match(html, /100,0 g/);
-    assert.match(html, /Custo do filamento/);
-    assert.match(html, /42,00/); // custo de material do lote
+    assert.ok(!/Custo do filamento/.test(html));
+    assert.ok(!html.includes('42,00'));
   });
 
   it('separa por peça e total quando há mais de uma peça', () => {
@@ -153,8 +159,42 @@ describe('buildQuoteHtml · especificações técnicas', () => {
     assert.ok(!/Filamento consumido/.test(html));
   });
 
-  it('esconde o custo do filamento quando a opção está desligada', () => {
-    const html = buildQuoteHtml(quote, { ...company, quoteShowMaterialCost: false });
+  it('lista depreciação e custos adicionais, nunca o filamento', () => {
+    const html = buildQuoteHtml(quote, company);
+
+    assert.match(html, /Custos do serviço/);
+    assert.match(html, /Deprecia/);
+    assert.match(html, /4,20/);
+    assert.match(html, /Modelagem 3D/);
+    assert.match(html, /150,00/);
+    assert.match(html, /Cola, tinta e consumíveis/);
+    assert.match(html, /7,50/);
+    assert.ok(!/Custo do filamento/.test(html));
+  });
+
+  it('omite custos zerados e ignora adicional disfarçado de filamento', () => {
+    const html = buildQuoteHtml(
+      {
+        ...quote,
+        extraItems: [
+          { label: 'Custo do filamento', amountCents: 9999, perUnit: true },
+          { label: 'Modelagem 3D', amountCents: 0, perUnit: true },
+        ],
+        unit: { ...quote.unit, depreciation: 0 },
+        totals: { ...quote.totals, depreciation: 0, material: 4200 },
+      },
+      company,
+    );
+
+    assert.ok(!/Custos do serviço/.test(html));
+    assert.ok(!/Deprecia/.test(html));
+    assert.ok(!/Modelagem 3D/.test(html));
+    assert.ok(!/Custo do filamento/.test(html));
+    assert.ok(!html.includes('99,99'));
+  });
+
+  it('nunca mostra filamento mesmo se a configuração antiga pedir', () => {
+    const html = buildQuoteHtml(quote, { ...company, quoteShowMaterialCost: true });
 
     assert.match(html, /Especificações técnicas/);
     assert.match(html, /Peso da peça/);
@@ -166,6 +206,7 @@ describe('buildQuoteHtml · especificações técnicas', () => {
     const html = buildQuoteHtml(quote, { ...company, quoteShowSpecs: false });
 
     assert.ok(!/Especificações técnicas/.test(html));
+    assert.ok(!/Custos do serviço/.test(html));
     assert.ok(!/Peso da peça/.test(html));
     assert.ok(!/Custo do filamento/.test(html));
     // O essencial continua: descrição, quantidade e preço.
@@ -184,6 +225,27 @@ describe('buildQuoteHtml · especificações técnicas', () => {
     assert.match(html, /Peso da peça/);
     assert.match(html, /100,0 g/);
     assert.ok(!/Filamento consumido/.test(html));
+  });
+
+  it('recupera custos adicionais de orçamentos antigos pelo formulário salvo', () => {
+    const antigo = { ...quote };
+    delete antigo.extraItems;
+    const html = buildQuoteHtml(
+      {
+        ...antigo,
+        input: {
+          extras: [{ label: 'Modelagem 3D', amount: '40', perUnit: true }],
+        },
+        unit: { ...quote.unit, depreciation: 140 },
+        totals: { ...quote.totals, depreciation: 420, material: 4200 },
+      },
+      company,
+    );
+
+    assert.match(html, /Modelagem 3D/);
+    assert.match(html, /120,00/);
+    assert.match(html, /Deprecia/);
+    assert.ok(!/Custo do filamento/.test(html));
   });
 
   it('omite linhas sem dado em vez de mostrar zero', () => {

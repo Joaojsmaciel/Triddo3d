@@ -370,21 +370,15 @@ export default function SettingsPage() {
 
               <Checkbox
                 label="Especificações técnicas"
-                hint="Material, impressora, peso da peça e tempo de impressão"
+                hint="Material, impressora, peso da peça, tempo de impressão, depreciação e custos adicionais"
                 checked={form.company.quoteShowSpecs !== false}
                 onChange={setCompanyFlag('quoteShowSpecs')}
               />
 
-              <Checkbox
-                label="Custo do filamento"
-                hint="Junto com o preço final, permite ao cliente estimar quanto você cobra acima do material"
-                checked={form.company.quoteShowMaterialCost !== false}
-                onChange={setCompanyFlag('quoteShowMaterialCost')}
-              />
-
               <Callout tone="info">
-                Mão de obra, custo de máquina, depreciação, manutenção, reserva para falhas, lucro e
-                margem <strong className="text-gray-100">nunca</strong> aparecem no PDF do cliente.
+                Depreciação e custos adicionais (modelagem, cola, tinta) só entram no PDF se tiverem
+                valor. Custo de filamento, mão de obra, manutenção, reserva para falhas, lucro e
+                margem <strong className="text-gray-100">nunca</strong> aparecem no documento do cliente.
               </Callout>
             </div>
           </CardBody>

@@ -67,6 +67,7 @@ export function createFormState(settings, { material, printer } = {}) {
     discountPercent: '',
     discountMode: settings.discountMode || DISCOUNT_MODE.ABSORB,
     minPrice: centsToInput(settings.minPriceCents),
+    priceOverride: '',
 
     notes: '',
   };
@@ -128,6 +129,7 @@ export function toPricingInput(form, settings, mode = PRICING_MODE.FULL) {
     discountPercent: quick ? 0 : inputToNumber(form.discountPercent),
     discountMode: form.discountMode,
     minPriceCents: toCents(form.minPrice),
+    priceOverrideCents: toCents(form.priceOverride),
 
     notes: form.notes,
   };
@@ -183,8 +185,10 @@ export function buildQuote({ form, result, mode, material, printer, code, status
     input: { ...form, __mode: mode },
     unit: pick(result.perUnit, financialKeys),
     totals: pick(result.batch, financialKeys),
+    extraItems: result.extraItems || [],
     marginPercent: inputToNumber(form.marginPercent),
     effectiveMargin: result.effectiveMargin,
+    priceOverridden: Boolean(result.priceOverridden),
 
     notes: form.notes,
     createdAt: existing?.createdAt,
