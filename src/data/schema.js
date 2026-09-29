@@ -58,6 +58,13 @@ export function defaultSettings() {
       address: '',
       quoteValidityDays: 7,
       quoteFooter: 'Orçamento sujeito a alteração após o prazo de validade.',
+
+      /**
+       * Quanto o PDF do cliente revela. Mão de obra, máquina, depreciação,
+       * reserva, lucro e margem ficam fora do documento em qualquer combinação.
+       */
+      quoteShowSpecs: true,
+      quoteShowMaterialCost: true,
     },
   };
 }

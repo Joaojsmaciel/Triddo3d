@@ -5,6 +5,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Checkbox,
   DataRow,
   MoneyInput,
   NumberInput,
@@ -66,6 +67,12 @@ export default function SettingsPage() {
   const setCompany = (field) => (event) => {
     setDirty(true);
     setForm((current) => ({ ...current, company: { ...current.company, [field]: event.target.value } }));
+  };
+
+  /** Campos booleanos da empresa recebem o valor direto, não um evento. */
+  const setCompanyFlag = (field) => (value) => {
+    setDirty(true);
+    setForm((current) => ({ ...current, company: { ...current.company, [field]: value } }));
   };
 
   const handleSave = async () => {
@@ -355,6 +362,31 @@ export default function SettingsPage() {
               className="mt-4"
               hint="Texto impresso no pé do PDF"
             />
+
+            <div className="mt-5 space-y-3 border-t border-ink-800 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                O que o PDF do cliente mostra
+              </p>
+
+              <Checkbox
+                label="Especificações técnicas"
+                hint="Material, impressora, peso da peça e tempo de impressão"
+                checked={form.company.quoteShowSpecs !== false}
+                onChange={setCompanyFlag('quoteShowSpecs')}
+              />
+
+              <Checkbox
+                label="Custo do filamento"
+                hint="Junto com o preço final, permite ao cliente estimar quanto você cobra acima do material"
+                checked={form.company.quoteShowMaterialCost !== false}
+                onChange={setCompanyFlag('quoteShowMaterialCost')}
+              />
+
+              <Callout tone="info">
+                Mão de obra, custo de máquina, depreciação, manutenção, reserva para falhas, lucro e
+                margem <strong className="text-gray-100">nunca</strong> aparecem no PDF do cliente.
+              </Callout>
+            </div>
           </CardBody>
         </Card>
 

@@ -6,12 +6,17 @@
  * adicionar uma biblioteca de PDF ao projeto e sempre respeita o idioma,
  * a fonte e o tamanho de papel configurados na máquina.
  *
- * O documento do cliente mostra descrição, quantidade e preço — nunca os custos
- * internos nem a margem de lucro.
+ * O documento do cliente mostra a descrição do serviço, as especificações
+ * técnicas (peso e tempo) e o preço. Mão de obra, custo de máquina, depreciação,
+ * manutenção, reserva para falhas, lucro e margem nunca aparecem.
+ *
+ * O custo do filamento é o único custo que pode ser exibido, e só quando
+ * `company.quoteShowMaterialCost` estiver ligado em Configurações.
  */
 
-import { formatCents } from '../../core/money.js';
+import { formatCents, formatNumber } from '../../core/money.js';
 import { QUOTE_STATUS_LABELS } from '../../core/reports.js';
+import { formatHours } from '../../core/units.js';
 import { formatDate } from '../../lib/form.js';
 
 function escapeHtml(value) {
@@ -28,12 +33,103 @@ function validUntil(createdAt, days) {
   return formatDate(date.toISOString());
 }
 
+function grams(value) {
+  return `${formatNumber(value, 1)} g`;
+}
+
+/**
+ * Nome da empresa com o "3D" final destacado em azul.
+ *
+ * O sufixo não pode ser fixo no template: o nome padrão já é "TRIDDO 3D", e
+ * acrescentar outro "3D" imprimia "TRIDDO 3D 3D" no cabeçalho do cliente.
+ */
+function brandName(name) {
+  const clean = String(name || 'Triddo 3D').trim();
+  const match = clean.match(/^(.*?)\s*(3D)$/i);
+
+  if (!match) return escapeHtml(clean);
+  const prefix = match[1].trim();
+  if (!prefix) return `<span>${escapeHtml(match[2])}</span>`;
+  return `${escapeHtml(prefix)} <span>${escapeHtml(match[2])}</span>`;
+}
+
+/**
+ * Especificações técnicas do serviço: o que o cliente precisa para entender o
+ * que está comprando, sem expor a estrutura de custos.
+ *
+ * Pesos e tempos por peça só aparecem quando há mais de uma peça — para
+ * quantidade 1 seriam a repetição literal do total.
+ *
+ * ATENÇÃO: os valores devolvidos aqui já vão escapados e são inseridos como HTML
+ * (uma das linhas carrega marcação própria). Ao acrescentar qualquer texto vindo
+ * do usuário, passe por `escapeHtml` nesta função.
+ */
+function buildSpecs(quote, company) {
+  const unit = quote.unit || {};
+  const totals = quote.totals || {};
+  const multiple = quote.quantity > 1;
+
+  // Orçamentos salvos antes deste campo existir não têm o peso líquido.
+  const netWeight = Number(unit.grams) || 0;
+  const billable = Number(unit.billableGrams) || 0;
+  const printHours = Number(unit.printHours) || 0;
+
+  const rows = [];
+
+  if (quote.materialName) rows.push(['Material', escapeHtml(quote.materialName)]);
+  if (quote.printerName) rows.push(['Impressora', escapeHtml(quote.printerName)]);
+
+  if (billable > 0) {
+    // Quando há desperdício somado, o cliente paga pelo filamento consumido:
+    // mostramos os dois números para que a diferença não pareça um erro.
+    const showBoth = netWeight > 0 && Math.abs(billable - netWeight) >= 0.05;
+
+    if (showBoth) {
+      rows.push(['Peso da peça', grams(netWeight)]);
+      rows.push(['Filamento consumido', `${grams(billable)} <span class="hint">(inclui suportes e purga)</span>`]);
+    } else {
+      rows.push(['Peso da peça', grams(billable)]);
+    }
+
+    if (multiple) {
+      rows.push(['Filamento total', grams(Number(totals.billableGrams) || billable * quote.quantity)]);
+    }
+  }
+
+  if (printHours > 0) {
+    if (multiple) {
+      rows.push(['Tempo por peça', formatHours(printHours)]);
+      rows.push([
+        'Tempo total de impressão',
+        formatHours(Number(totals.printHours) || printHours * quote.quantity),
+      ]);
+    } else {
+      rows.push(['Tempo de impressão', formatHours(printHours)]);
+    }
+  }
+
+  if (company.quoteShowMaterialCost) {
+    const materialCost = Number(totals.material) || 0;
+    if (materialCost > 0) {
+      rows.push(['Custo do filamento', formatCents(materialCost)]);
+    }
+  }
+
+  return rows;
+}
+
 /** Monta o HTML completo do orçamento do cliente. */
 export function buildQuoteHtml(quote, company = {}) {
-  const unitPrice = quote.unit?.price || 0;
   const totalPrice = quote.totals?.price || 0;
-  const discount = quote.totals?.discount || 0;
-  const listTotal = quote.totals?.listPrice || totalPrice;
+
+  // A linha do item traz o preço DE TABELA e o desconto é abatido no rodapé.
+  // Usar o preço já descontado no item deixaria o subtotal acima do total dos
+  // itens, o que parece erro de conta para quem recebe o orçamento.
+  const unitPrice = quote.unit?.listPrice || quote.unit?.price || 0;
+  const subtotal = unitPrice * quote.quantity;
+  // Derivado em vez de lido: garante que a conta impressa sempre feche.
+  const discount = Math.max(0, subtotal - totalPrice);
+
   const expiry = validUntil(quote.createdAt, company.quoteValidityDays);
 
   const contactLines = [company.document, company.phone, company.email, company.website, company.address]
@@ -41,10 +137,7 @@ export function buildQuoteHtml(quote, company = {}) {
     .map((line) => escapeHtml(line))
     .join(' &nbsp;·&nbsp; ');
 
-  const specs = [
-    quote.materialName ? ['Material', quote.materialName] : null,
-    quote.printerName ? ['Produção', quote.printerName] : null,
-  ].filter(Boolean);
+  const specs = company.quoteShowSpecs === false ? [] : buildSpecs(quote, company);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -77,6 +170,21 @@ export function buildQuoteHtml(quote, company = {}) {
   .grid { display: flex; gap: 24px; margin-top: 16px; }
   .grid > div { flex: 1; }
   .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #9CA3AF; margin-bottom: 2px; }
+  .hint { color: #9CA3AF; font-size: 10px; }
+  .specs { margin-top: 20px; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
+  .specs-title {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #6B7280;
+    background: #F9FAFB; padding: 7px 12px; border-bottom: 1px solid #E5E7EB; font-weight: 700;
+  }
+  /* Duas colunas de pares rótulo/valor, quebrando para uma só em papel estreito. */
+  .specs-body { display: flex; flex-wrap: wrap; padding: 4px 12px 8px; }
+  .specs-row {
+    flex: 1 1 46%; display: flex; justify-content: space-between; gap: 12px;
+    padding: 5px 0; border-bottom: 1px dotted #E5E7EB; min-width: 240px;
+  }
+  .specs-row:nth-child(odd) { margin-right: 24px; }
+  .specs-row span:first-child { color: #6B7280; }
+  .specs-row span:last-child { font-weight: 600; text-align: right; }
   table { width: 100%; border-collapse: collapse; margin-top: 20px; }
   th {
     text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
@@ -113,7 +221,7 @@ export function buildQuoteHtml(quote, company = {}) {
         </g>
       </svg>
       <div>
-        <div class="brand-name">${escapeHtml(company.name || 'Triddo')} <span>3D</span></div>
+        <div class="brand-name">${brandName(company.name)}</div>
         <div class="brand-tag">${escapeHtml(company.tagline || 'Print and Design 3D')}</div>
       </div>
     </div>
@@ -139,6 +247,20 @@ export function buildQuoteHtml(quote, company = {}) {
     </div>
   </div>
 
+  ${specs.length
+    ? `<div class="specs">
+    <div class="specs-title">Especificações técnicas</div>
+    <div class="specs-body">
+      ${specs
+        .map(
+          ([label, value]) =>
+            `<div class="specs-row"><span>${escapeHtml(label)}</span><span>${value}</span></div>`,
+        )
+        .join('\n      ')}
+    </div>
+  </div>`
+    : ''}
+
   <table>
     <thead>
       <tr>
@@ -152,19 +274,19 @@ export function buildQuoteHtml(quote, company = {}) {
       <tr>
         <td>
           <strong>${escapeHtml(quote.projectName || 'Peça impressa em 3D')}</strong>
-          ${specs.length ? `<div class="muted" style="margin-top:4px">${specs
-            .map(([key, value]) => `${escapeHtml(key)}: ${escapeHtml(value)}`)
-            .join(' &nbsp;·&nbsp; ')}</div>` : ''}
+          <div class="muted" style="margin-top:4px">Impressão 3D FDM${
+            quote.materialName ? ` em ${escapeHtml(quote.materialName)}` : ''
+          }</div>
         </td>
         <td class="num">${quote.quantity}</td>
         <td class="num">${formatCents(unitPrice)}</td>
-        <td class="num">${formatCents(unitPrice * quote.quantity)}</td>
+        <td class="num">${formatCents(subtotal)}</td>
       </tr>
     </tbody>
   </table>
 
   <div class="totals">
-    ${discount > 0 ? `<div><span>Subtotal</span><span>${formatCents(listTotal)}</span></div>` : ''}
+    ${discount > 0 ? `<div><span>Subtotal</span><span>${formatCents(subtotal)}</span></div>` : ''}
     ${discount > 0 ? `<div><span>Desconto</span><span>− ${formatCents(discount)}</span></div>` : ''}
     <div class="grand"><span>Total</span><span>${formatCents(totalPrice)}</span></div>
   </div>

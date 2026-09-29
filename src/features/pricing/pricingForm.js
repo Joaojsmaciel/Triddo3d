@@ -159,6 +159,8 @@ export function buildQuote({ form, result, mode, material, printer, code, status
     'profit',
     'breakEven',
     'minimumPrice',
+    // Grandezas técnicas: alimentam as especificações do orçamento do cliente.
+    'grams',
     'billableGrams',
     'printHours',
     'laborHours',
