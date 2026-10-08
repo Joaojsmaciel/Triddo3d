@@ -17,6 +17,7 @@ import {
 import Icon from '../components/ui/Icon';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { openQuoteDocument } from '../features/quotes/quoteDocument';
+import QuoteFilesPanel from '../features/quotes/QuoteFilesPanel';
 import { QUOTE_STATUS, QUOTE_STATUS_LABELS, summarizeQuotes } from '../core/reports';
 import { formatCents, formatRatioAsPercent } from '../core/money';
 import { formatDate, formatDateTime } from '../lib/form';
@@ -228,6 +229,7 @@ export default function QuotesPage({ navigate }) {
 
                 <div className="flex items-center gap-1">
                   <IconButton icon="info" label="Ver detalhes" onClick={() => setDetail(quote)} />
+                  <IconButton icon="folder" label="Arquivos do orçamento" onClick={() => setDetail(quote)} />
                   <IconButton icon="file" label="Exportar PDF" onClick={() => handleExport(quote)} />
                   <IconButton
                     icon="edit"
@@ -383,6 +385,8 @@ function QuoteDetailModal({ quote, onClose, onExport, onEdit }) {
             </CardBody>
           </Card>
         ) : null}
+
+        <QuoteFilesPanel quote={quote} />
       </div>
     </Modal>
   );
