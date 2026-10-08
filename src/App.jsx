@@ -8,6 +8,7 @@ import PricingPage from './pages/PricingPage';
 import MaterialsPage from './pages/MaterialsPage';
 import PrintersPage from './pages/PrintersPage';
 import QuotesPage from './pages/QuotesPage';
+import CashFlowPage from './pages/CashFlowPage';
 import SettingsPage from './pages/SettingsPage';
 import { Button, Card, EmptyState } from './components/ui/primitives';
 
@@ -17,6 +18,7 @@ const PAGES = {
   [ROUTES.MATERIALS]: MaterialsPage,
   [ROUTES.PRINTERS]: PrintersPage,
   [ROUTES.QUOTES]: QuotesPage,
+  [ROUTES.CASHFLOW]: CashFlowPage,
   [ROUTES.SETTINGS]: SettingsPage,
 };
 

@@ -9,7 +9,7 @@ export default function BarChart({ data = [], series = [], height = 200, formatV
 
   const max = Math.max(
     1,
-    ...data.flatMap((point) => series.map((item) => Number(point[item.key]) || 0)),
+    ...data.flatMap((point) => series.map((item) => Math.abs(Number(point[item.key]) || 0))),
   );
 
   return (
@@ -30,12 +30,17 @@ export default function BarChart({ data = [], series = [], height = 200, formatV
               {series.map((item) => {
                 const value = Number(point[item.key]) || 0;
                 // Reserva 2% de altura para que valores baixos ainda apareçam.
-                const percent = Math.max(value > 0 ? 2 : 0, (value / max) * 100);
+                // Valor negativo (mês com prejuízo) usa a altura absoluta, em vermelho.
+                const percent = Math.max(value !== 0 ? 2 : 0, (Math.abs(value) / max) * 100);
                 return (
                   <div
                     key={item.key}
                     className="group relative w-full max-w-[18px] rounded-t transition-opacity hover:opacity-80"
-                    style={{ height: `${percent}%`, backgroundColor: item.color, minHeight: value > 0 ? 3 : 0 }}
+                    style={{
+                      height: `${percent}%`,
+                      backgroundColor: value < 0 ? '#F87171' : item.color,
+                      minHeight: value !== 0 ? 3 : 0,
+                    }}
                   >
                     <span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-ink-800 px-2 py-1 text-[10px] font-semibold text-gray-100 ring-1 ring-ink-600 group-hover:block">
                       {item.label}: {formatValue(value)}

@@ -9,6 +9,7 @@ import { asCents, parseDecimal, toCents } from '../core/money.js';
 import { DISCOUNT_MODE, WASTE_MODE } from '../core/pricing.js';
 import { DEPRECIATION_MODE } from '../core/printers.js';
 import { QUOTE_STATUS } from '../core/reports.js';
+import { CASH_TYPE, todayKey, toDateKey } from '../core/cashflow.js';
 
 export const SCHEMA_VERSION = 1;
 export const STATE_KEY = 'triddo3d:v1:state';
@@ -19,6 +20,7 @@ export const COLLECTIONS = {
   MATERIALS: 'materials',
   PRINTERS: 'printers',
   QUOTES: 'quotes',
+  TRANSACTIONS: 'transactions',
 };
 
 export function createId(prefix = 'id') {
@@ -132,7 +134,26 @@ export function createQuote(patch = {}) {
     marginPercent: parseDecimal(patch.marginPercent, 0),
     effectiveMargin: parseDecimal(patch.effectiveMargin, 0),
     priceOverridden: Boolean(patch.priceOverridden),
+    /** Quando o orçamento foi aprovado: é a data em que a receita entra no caixa. */
+    approvedAt: patch.approvedAt ?? null,
 
+    notes: patch.notes ?? '',
+    createdAt: patch.createdAt || new Date().toISOString(),
+    updatedAt: patch.updatedAt || new Date().toISOString(),
+  };
+}
+
+/** Lançamento avulso do fluxo de caixa (entrada ou saída). */
+export function createTransaction(patch = {}) {
+  return {
+    id: patch.id || createId('cx'),
+    type: patch.type === CASH_TYPE.IN ? CASH_TYPE.IN : CASH_TYPE.OUT,
+    date: toDateKey(patch.date) || todayKey(),
+    description: patch.description ?? '',
+    category: patch.category ?? '',
+    amountCents: Math.abs(asCents(patch.amountCents, 0)),
+    /** Orçamento ao qual a saída se refere, quando houver. */
+    quoteId: patch.quoteId ?? '',
     notes: patch.notes ?? '',
     createdAt: patch.createdAt || new Date().toISOString(),
     updatedAt: patch.updatedAt || new Date().toISOString(),
@@ -170,6 +191,7 @@ export function createInitialState() {
       }),
     ],
     [COLLECTIONS.QUOTES]: [],
+    [COLLECTIONS.TRANSACTIONS]: [],
   };
 }
 
@@ -249,6 +271,9 @@ export function migrateState(stored, driver) {
       : base[COLLECTIONS.PRINTERS],
     [COLLECTIONS.QUOTES]: Array.isArray(stored[COLLECTIONS.QUOTES])
       ? stored[COLLECTIONS.QUOTES].map(createQuote)
+      : [],
+    [COLLECTIONS.TRANSACTIONS]: Array.isArray(stored[COLLECTIONS.TRANSACTIONS])
+      ? stored[COLLECTIONS.TRANSACTIONS].map(createTransaction)
       : [],
   };
 }

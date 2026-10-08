@@ -17,6 +17,7 @@ import {
   createMaterial,
   createPrinter,
   createQuote,
+  createTransaction,
   defaultSettings,
   migrateState,
   nextQuoteCode,
@@ -26,6 +27,7 @@ const FACTORIES = {
   [COLLECTIONS.MATERIALS]: createMaterial,
   [COLLECTIONS.PRINTERS]: createPrinter,
   [COLLECTIONS.QUOTES]: createQuote,
+  [COLLECTIONS.TRANSACTIONS]: createTransaction,
 };
 
 let driver = detectDriver();
@@ -88,6 +90,7 @@ export function getState() {
     [COLLECTIONS.MATERIALS]: [...current[COLLECTIONS.MATERIALS]],
     [COLLECTIONS.PRINTERS]: [...current[COLLECTIONS.PRINTERS]],
     [COLLECTIONS.QUOTES]: [...current[COLLECTIONS.QUOTES]],
+    [COLLECTIONS.TRANSACTIONS]: [...current[COLLECTIONS.TRANSACTIONS]],
   };
 }
 

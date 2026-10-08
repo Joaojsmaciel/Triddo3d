@@ -60,16 +60,21 @@ export function StoreProvider({ children }) {
       duplicateQuote: async (id) => {
         const code = await db.reserveQuoteCode();
         return run(
-          () => db.duplicate(COLLECTIONS.QUOTES, id, { code, status: 'draft' }),
+          () => db.duplicate(COLLECTIONS.QUOTES, id, { code, status: 'draft', approvedAt: null }),
           'Orçamento duplicado como rascunho.',
         );
       },
       updateQuoteStatus: async (id, status) => {
         const quote = await db.get(COLLECTIONS.QUOTES, id);
         if (!quote) return null;
-        return run(() => db.put(COLLECTIONS.QUOTES, { ...quote, status }), 'Status atualizado.');
+        const approvedAt = status === 'approved' ? quote.approvedAt || new Date().toISOString() : null;
+        return run(() => db.put(COLLECTIONS.QUOTES, { ...quote, status, approvedAt }), 'Status atualizado.');
       },
       reserveQuoteCode: () => db.reserveQuoteCode(),
+
+      saveTransaction: (transaction) =>
+        run(() => db.put(COLLECTIONS.TRANSACTIONS, transaction), 'Lançamento salvo.'),
+      deleteTransaction: (id) => run(() => db.remove(COLLECTIONS.TRANSACTIONS, id), 'Lançamento excluído.'),
 
       updateSettings: (patch, message = 'Configurações salvas.') =>
         run(() => db.updateSettings(patch), message),
@@ -88,6 +93,7 @@ export function StoreProvider({ children }) {
       materials: state[COLLECTIONS.MATERIALS],
       printers: state[COLLECTIONS.PRINTERS],
       quotes: state[COLLECTIONS.QUOTES],
+      transactions: state[COLLECTIONS.TRANSACTIONS],
       state,
       actions,
     }),

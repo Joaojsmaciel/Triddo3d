@@ -14,6 +14,7 @@ export const ROUTES = {
   MATERIALS: '/materiais',
   PRINTERS: '/impressoras',
   QUOTES: '/orcamentos',
+  CASHFLOW: '/caixa',
   SETTINGS: '/configuracoes',
 };
 
@@ -24,6 +25,7 @@ export const NAV_ITEMS = [
   { path: ROUTES.MATERIALS, label: 'Materiais', short: 'Materiais', icon: 'spool' },
   { path: ROUTES.PRINTERS, label: 'Impressoras', short: 'Máquinas', icon: 'printer' },
   { path: ROUTES.QUOTES, label: 'Orçamentos', short: 'Orçamentos', icon: 'receipt' },
+  { path: ROUTES.CASHFLOW, label: 'Fluxo de caixa', short: 'Caixa', icon: 'wallet' },
   { path: ROUTES.SETTINGS, label: 'Configurações', short: 'Ajustes', icon: 'settings' },
 ];
 
