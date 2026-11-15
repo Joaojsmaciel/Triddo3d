@@ -7,7 +7,7 @@
  * a fonte e o tamanho de papel configurados na máquina.
  *
  * O documento do cliente mostra a descrição do serviço, as especificações
- * técnicas (peso e tempo) e o preço. Quando existirem, lista depreciação e
+ * técnicas (filamentos, dimensões, peso e tempo) e o preço. Quando existirem, lista depreciação e
  * custos adicionais (modelagem, cola, tinta, embalagem).
  *
  * Custo de filamento, mão de obra, custo de máquina, manutenção, reserva para
@@ -35,6 +35,26 @@ function validUntil(createdAt, days) {
 
 function grams(value) {
   return `${formatNumber(value, 1)} g`;
+}
+
+/** Milímetros sem casas desnecessárias: "120 mm", "2,5 mm", "0,25 mm". */
+function millimeters(value) {
+  const formatted = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value);
+  return `${formatted} mm`;
+}
+
+const DIMENSIONS = [
+  ['Altura', 'heightMm'],
+  ['Largura', 'widthMm'],
+  ['Espessura', 'thicknessMm'],
+];
+
+/** Filamentos com peso, de orçamentos que gravaram a lista (vários materiais). */
+function filamentsFromQuote(quote) {
+  if (!Array.isArray(quote.filaments)) return [];
+  return quote.filaments.filter(
+    (item) => (Number(item?.grams) || 0) > 0 || (Number(item?.billableGrams) || 0) > 0,
+  );
 }
 
 /**
@@ -75,9 +95,24 @@ function buildSpecs(quote) {
   const printHours = Number(unit.printHours) || 0;
 
   const rows = [];
+  const filaments = filamentsFromQuote(quote);
 
-  if (quote.materialName) rows.push(['Material', escapeHtml(quote.materialName)]);
+  if (filaments.length > 1) {
+    // Uma linha por filamento, com o peso informado de cada um por peça.
+    filaments.forEach((item, index) => {
+      const name = String(item.materialName || '').trim() || `Material ${index + 1}`;
+      rows.push([`Filamento · ${name}`, grams(Number(item.grams) || Number(item.billableGrams) || 0)]);
+    });
+  } else if (quote.materialName) {
+    rows.push(['Material', escapeHtml(quote.materialName)]);
+  }
   if (quote.printerName) rows.push(['Impressora', escapeHtml(quote.printerName)]);
+
+  const dimensions = quote.dimensions || {};
+  DIMENSIONS.forEach(([label, key]) => {
+    const value = Number(dimensions[key]) || 0;
+    if (value > 0) rows.push([label, millimeters(value)]);
+  });
 
   if (billable > 0) {
     // Quando há desperdício somado, o cliente paga pelo filamento consumido:

@@ -102,12 +102,35 @@ export function topMaterials(quotes = [], limit = 5) {
 
   (Array.isArray(quotes) ? quotes : []).forEach((quote) => {
     if (!isRealizedRevenue(quote)) return;
-    const name = quote?.materialName || 'Não informado';
-    const current = totals.get(name) || { name, grams: 0, quotes: 0, revenueCents: 0 };
-    current.grams += Number(quote?.totals?.billableGrams) || 0;
-    current.quotes += 1;
-    current.revenueCents += asCents(quote?.totals?.price);
-    totals.set(name, current);
+
+    const quoteGrams = Number(quote?.totals?.billableGrams) || 0;
+    const quantity = Math.max(1, Number(quote?.quantity) || 1);
+    const revenue = asCents(quote?.totals?.price);
+
+    // Orçamentos com vários filamentos: cada material leva as próprias gramas,
+    // e a receita é dividida na proporção do peso para não ser contada duas vezes.
+    const filaments = Array.isArray(quote?.filaments)
+      ? quote.filaments.filter((item) => (Number(item?.billableGrams) || 0) > 0)
+      : [];
+    const parts = filaments.length > 0
+      ? filaments.map((item) => ({
+          name: item.materialName || 'Não informado',
+          grams: (Number(item.billableGrams) || 0) * quantity,
+        }))
+      : [{ name: quote?.materialName || 'Não informado', grams: quoteGrams }];
+    const partsGrams = parts.reduce((sum, part) => sum + part.grams, 0);
+
+    const counted = new Set();
+    parts.forEach((part) => {
+      const current = totals.get(part.name) || { name: part.name, grams: 0, quotes: 0, revenueCents: 0 };
+      current.grams += part.grams;
+      if (!counted.has(part.name)) {
+        current.quotes += 1;
+        counted.add(part.name);
+      }
+      current.revenueCents += parts.length > 1 ? Math.round(revenue * shareOf(part.grams, partsGrams)) : revenue;
+      totals.set(part.name, current);
+    });
   });
 
   const list = [...totals.values()].sort((a, b) => b.grams - a.grams);

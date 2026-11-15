@@ -488,6 +488,115 @@ describe('validações', () => {
   });
 });
 
+describe('vários filamentos', () => {
+  const black = {
+    id: 'mat-2',
+    brand: 'Voolt',
+    name: 'PETG Preto',
+    priceCents: 10000, // R$ 100,00
+    shippingCents: 0,
+    spoolGrams: 1000, // -> 10 centavos por grama
+  };
+  const white = { ...material, brand: 'Genérico' };
+  const multiContext = { materials: [white, black], printer };
+
+  function multiInput(filaments, overrides = {}) {
+    const input = baseInput({ filaments, ...overrides });
+    delete input.materialId;
+    delete input.grams;
+    return input;
+  }
+
+  it('soma o custo de cada filamento pelo seu próprio preço por grama', () => {
+    const result = calculatePricing(
+      multiInput([
+        { materialId: white.id, grams: 60 },
+        { materialId: black.id, grams: 40 },
+      ]),
+      multiContext,
+    );
+
+    assert.equal(result.ok, true);
+    // 60 g x R$0,14 + 40 g x R$0,10 = R$ 8,40 + R$ 4,00
+    assert.equal(result.perUnit.material, 1240);
+    assert.equal(result.perUnit.grams, 100);
+    assert.deepEqual(
+      result.filamentItems.map((item) => [item.materialName, item.grams, item.costCents]),
+      [
+        ['Genérico PLA Branco', 60, 840],
+        ['Voolt PETG Preto', 40, 400],
+      ],
+    );
+  });
+
+  it('com um único filamento dá o mesmo resultado do formato antigo', () => {
+    const multi = calculatePricing(multiInput([{ materialId: material.id, grams: 100 }]), {
+      materials: [material],
+      printer,
+    });
+    const legacy = calculatePricing(baseInput(), context);
+    assert.deepEqual(multi.perUnit, legacy.perUnit);
+  });
+
+  it('aplica o desperdício a todos os filamentos', () => {
+    const result = calculatePricing(
+      multiInput(
+        [
+          { materialId: white.id, grams: 50 },
+          { materialId: black.id, grams: 50 },
+        ],
+        { wastePercent: 10 },
+      ),
+      multiContext,
+    );
+    closeTo(result.perUnit.billableGrams, 110);
+    // 55 g x 0,14 + 55 g x 0,10 = 7,70 + 5,50
+    assert.equal(result.perUnit.material, 1320);
+    closeTo(result.filamentItems[1].billableGrams, 55);
+  });
+
+  it('divide o peso de cada filamento pelo lote', () => {
+    const result = calculatePricing(
+      multiInput(
+        [
+          { materialId: white.id, grams: 120 },
+          { materialId: black.id, grams: 80 },
+        ],
+        { quantity: 4, basis: BASIS.BATCH },
+      ),
+      multiContext,
+    );
+    assert.deepEqual(result.filamentItems.map((item) => item.grams), [30, 20]);
+    assert.equal(result.perUnit.grams, 50);
+  });
+
+  it('ignora linhas vazias e exige material nas linhas com peso', () => {
+    const vazio = calculatePricing(
+      multiInput([
+        { materialId: white.id, grams: 100 },
+        { materialId: '', grams: 0 },
+      ]),
+      multiContext,
+    );
+    assert.equal(vazio.ok, true);
+    assert.equal(vazio.filamentItems.length, 1);
+
+    const semMaterial = calculatePricing(
+      multiInput([
+        { materialId: white.id, grams: 60 },
+        { materialId: '', grams: 40 },
+      ]),
+      multiContext,
+    );
+    assert.ok(errorFields(semMaterial).includes('materialId'));
+  });
+
+  it('recusa a lista sem peso nenhum', () => {
+    const result = calculatePricing(multiInput([{ materialId: white.id, grams: 0 }]), multiContext);
+    assert.ok(errorFields(result).includes('grams'));
+  });
+});
+
 describe('composição de custos', () => {
   it('as participações somam 100% do custo total', () => {
     const result = calculatePricing(

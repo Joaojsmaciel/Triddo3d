@@ -21,10 +21,12 @@ import {
 import Icon from '../components/ui/Icon';
 import ResultsPanel from '../features/pricing/ResultsPanel';
 import {
+  DIMENSION_FIELDS,
   EXTRA_PRESETS,
   PRICING_MODE,
   buildQuote,
   createExtra,
+  createFilament,
   createFormState,
   formStateFromQuote,
   toPricingInput,
@@ -32,11 +34,12 @@ import {
 import { BASIS, DISCOUNT_MODE, LABOR_STEPS, WASTE_MODE, calculatePricing } from '../core/pricing';
 import { costPerGramReais } from '../core/materials';
 import { describePrinter, machineCostPerHourCents } from '../core/printers';
-import { formatCents, formatRate, fromCents } from '../core/money';
+import { formatCents, formatNumber, formatRate, fromCents } from '../core/money';
 import { QUOTE_STATUS } from '../core/reports';
 import { ROUTES } from '../router/routes';
 import { useStore } from '../store/StoreProvider';
 import { useToast } from '../components/ui/Toast';
+import { inputToNumber } from '../lib/form';
 
 const LABOR_HINTS = {
   prepMinutes: 'Fatiar, preparar a mesa, iniciar',
@@ -74,13 +77,13 @@ export default function PricingPage({ params, navigate }) {
   const setMargin = (value) =>
     setForm((current) => ({ ...current, marginPercent: value, priceOverride: '' }));
 
-  const material = materials.find((item) => item.id === form.materialId) || null;
   const printer = printers.find((item) => item.id === form.printerId) || null;
+  const materialById = (id) => materials.find((item) => item.id === id) || null;
 
   const pricingInput = useMemo(() => toPricingInput(form, settings, mode), [form, settings, mode]);
   const result = useMemo(
-    () => calculatePricing(pricingInput, { material, printer }),
-    [pricingInput, material, printer],
+    () => calculatePricing(pricingInput, { materials, printer }),
+    [pricingInput, materials, printer],
   );
 
   const errorFor = (field) => result.errors.find((error) => error.field === field)?.message;
@@ -99,6 +102,32 @@ export default function PricingPage({ params, navigate }) {
   const removeExtra = (key) =>
     setForm((current) => ({ ...current, extras: current.extras.filter((extra) => extra.key !== key) }));
 
+  const addFilament = () =>
+    setForm((current) => ({ ...current, filaments: [...current.filaments, createFilament()] }));
+
+  const updateFilament = (key, patch) =>
+    setForm((current) => ({
+      ...current,
+      filaments: current.filaments.map((filament) =>
+        filament.key === key ? { ...filament, ...patch } : filament,
+      ),
+    }));
+
+  const removeFilament = (key) =>
+    setForm((current) => ({
+      ...current,
+      filaments:
+        current.filaments.length > 1
+          ? current.filaments.filter((filament) => filament.key !== key)
+          : current.filaments,
+    }));
+
+  const materialOptions = materials.map((item) => ({
+    value: item.id,
+    label: `${[item.brand, item.name].filter(Boolean).join(' ')} · ${item.type}`,
+  }));
+  const totalGrams = form.filaments.reduce((total, filament) => total + inputToNumber(filament.grams), 0);
+
   const handleSave = async (status) => {
     if (!result.ok) {
       toast.error(result.errors[0]?.message || 'Revise os dados antes de salvar.');
@@ -112,7 +141,6 @@ export default function PricingPage({ params, navigate }) {
       form,
       result,
       mode,
-      material,
       printer,
       code,
       status,
@@ -225,22 +253,6 @@ export default function PricingPage({ params, navigate }) {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Select
-                    label="Material utilizado"
-                    value={form.materialId}
-                    onChange={setEvent('materialId')}
-                    placeholder="Selecione um material"
-                    error={errorFor('materialId')}
-                    hint={
-                      material
-                        ? `Custo: ${formatRate(costPerGramReais(material), 4)} por grama`
-                        : undefined
-                    }
-                    options={materials.map((item) => ({
-                      value: item.id,
-                      label: `${[item.brand, item.name].filter(Boolean).join(' ')} · ${item.type}`,
-                    }))}
-                  />
-                  <Select
                     label="Impressora"
                     value={form.printerId}
                     onChange={setEvent('printerId')}
@@ -269,14 +281,66 @@ export default function PricingPage({ params, navigate }) {
                   ]}
                 />
 
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <NumberInput
-                    label="Peso de filamento"
-                    suffix="g"
-                    value={form.grams}
-                    onChange={set('grams')}
-                    error={errorFor('grams')}
-                  />
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Filamentos utilizados
+                    </p>
+                    {form.filaments.length > 1 ? (
+                      <span className="text-xs tabular-nums text-gray-500">
+                        Total: {formatNumber(totalGrams, 1)} g
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-3">
+                    {form.filaments.map((filament, index) => {
+                      const filamentMaterial = materialById(filament.materialId);
+                      const isFirst = index === 0;
+                      return (
+                        <div
+                          key={filament.key}
+                          className="grid gap-2 sm:grid-cols-[1fr_160px_auto] sm:items-start"
+                        >
+                          <Select
+                            label={form.filaments.length > 1 ? `Material ${index + 1}` : 'Material utilizado'}
+                            value={filament.materialId}
+                            onChange={(event) => updateFilament(filament.key, { materialId: event.target.value })}
+                            placeholder="Selecione um material"
+                            error={isFirst ? errorFor('materialId') : undefined}
+                            hint={
+                              filamentMaterial
+                                ? `Custo: ${formatRate(costPerGramReais(filamentMaterial), 4)} por grama`
+                                : undefined
+                            }
+                            options={materialOptions}
+                          />
+                          <NumberInput
+                            label="Peso"
+                            suffix="g"
+                            value={filament.grams}
+                            onChange={(value) => updateFilament(filament.key, { grams: value })}
+                            error={isFirst ? errorFor('grams') : undefined}
+                          />
+                          <IconButton
+                            icon="trash"
+                            label="Remover filamento"
+                            variant="danger"
+                            className="h-[42px] sm:mt-[22px]"
+                            disabled={form.filaments.length === 1}
+                            onClick={() => removeFilament(filament.key)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <Button variant="outline" size="sm" icon="plus" className="mt-3" onClick={addFilament}>
+                    Adicionar filamento
+                  </Button>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
                   <TextInput
                     label="Tempo de impressão"
                     value={form.printHours}
@@ -293,6 +357,26 @@ export default function PricingPage({ params, navigate }) {
                     onChange={set('quantity')}
                     error={errorFor('quantity')}
                   />
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Dimensões da peça
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {DIMENSION_FIELDS.map((field) => (
+                      <NumberInput
+                        key={field.key}
+                        label={field.label}
+                        suffix="mm"
+                        value={form[field.key]}
+                        onChange={set(field.key)}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-gray-600">
+                    Opcionais. Medidas de uma peça, exibidas nas especificações do orçamento do cliente.
+                  </p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">

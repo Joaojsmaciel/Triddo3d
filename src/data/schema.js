@@ -120,6 +120,13 @@ export function createQuote(patch = {}) {
 
     materialId: patch.materialId ?? '',
     materialName: patch.materialName ?? '',
+    /** Filamentos por peça ({ materialId, materialName, grams, billableGrams }). */
+    filaments: Array.isArray(patch.filaments) ? patch.filaments : null,
+    /** Medidas da peça em mm ({ heightMm, widthMm, thicknessMm }), só as informadas. */
+    dimensions:
+      patch.dimensions && typeof patch.dimensions === 'object' && !Array.isArray(patch.dimensions)
+        ? patch.dimensions
+        : null,
     printerId: patch.printerId ?? '',
     printerName: patch.printerName ?? '',
 

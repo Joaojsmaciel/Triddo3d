@@ -71,6 +71,12 @@ export function createEmptyPricingInput() {
     materialId: '',
     printerId: '',
 
+    /**
+     * Filamentos usados na peça: [{ materialId, grams }]. Quando ausente, vale o
+     * formato antigo de um único material (`materialId` + `grams`).
+     */
+    filaments: undefined,
+
     grams: 0,
     printHours: 0,
     wasteMode: WASTE_MODE.ADD,
@@ -106,11 +112,48 @@ function nonNegative(value) {
   return parsed > 0 ? parsed : 0;
 }
 
+/** Nome curto do material, como aparece no orçamento ("Marca Nome"). */
+export function describeFilamentMaterial(material) {
+  if (!material) return '';
+  return [material.brand, material.name].filter(Boolean).join(' ');
+}
+
+/**
+ * Lista de filamentos com o cadastro de material resolvido.
+ *
+ * Linhas totalmente vazias (sem material e sem peso) são descartadas: são as
+ * linhas que o usuário acabou de adicionar no formulário e ainda não preencheu.
+ */
+function resolveFilaments(raw, context) {
+  if (Array.isArray(raw.filaments)) {
+    const catalog = Array.isArray(context.materials) ? context.materials : [];
+    const fallback = context.material || null;
+    return raw.filaments
+      .map((filament) => {
+        const materialId = String(filament?.materialId || '');
+        const material =
+          catalog.find((item) => item.id === materialId) ||
+          (fallback && fallback.id === materialId ? fallback : null);
+        return { materialId, grams: nonNegative(filament?.grams), material };
+      })
+      .filter((filament) => filament.materialId || filament.grams > 0);
+  }
+
+  // Formato antigo: um único material e um único peso.
+  return [
+    {
+      materialId: String(raw.materialId || context.material?.id || ''),
+      grams: nonNegative(raw.grams),
+      material: context.material || null,
+    },
+  ];
+}
+
 /**
  * Traz todas as entradas para a mesma base (por unidade) e converte percentuais
  * em razões. Depois desta função o cálculo não precisa mais pensar em "lote".
  */
-function normalizeInput(raw, material, printer) {
+function normalizeInput(raw, filaments, printer) {
   const quantity = Math.max(1, Math.trunc(parseDecimal(raw.quantity, 1)));
   const basis = raw.basis === BASIS.BATCH ? BASIS.BATCH : BASIS.UNIT;
   const perUnitDivisor = basis === BASIS.BATCH ? quantity : 1;
@@ -133,11 +176,16 @@ function normalizeInput(raw, material, printer) {
     declaredWaste,
     wasteRatio,
 
-    grams: nonNegative(raw.grams) / perUnitDivisor,
+    filaments: filaments.map((filament) => ({
+      materialId: filament.materialId,
+      material: filament.material,
+      grams: filament.grams / perUnitDivisor,
+      costPerGram: costPerGramCents(filament.material || {}),
+    })),
+    grams: filaments.reduce((total, filament) => total + filament.grams, 0) / perUnitDivisor,
     printHours: nonNegative(raw.printHours) / perUnitDivisor,
     laborHours: minutesToHours(laborMinutes) / perUnitDivisor,
 
-    costPerGram: costPerGramCents(material || {}),
     depreciationPerHour: depreciationPerHourCents(printer || {}),
     maintenancePerHour: maintenancePerHourCents(printer || {}),
     laborRate: Math.max(0, asCents(raw.laborRateCents)),
@@ -187,7 +235,7 @@ function listExtraItems(extras) {
     .filter(Boolean);
 }
 
-function validate(input, material, printer, raw) {
+function validate(input, printer, raw) {
   const errors = [];
 
   if (parseDecimal(raw.quantity, 1) < 1) {
@@ -199,9 +247,16 @@ function validate(input, material, printer, raw) {
   if (input.printHours <= 0) {
     errors.push({ field: 'printHours', message: 'Informe o tempo de impressão (maior que zero).' });
   }
-  if (!material) {
-    errors.push({ field: 'materialId', message: 'Selecione um material cadastrado.' });
-  } else if (input.costPerGram <= 0) {
+  const multiple = input.filaments.length > 1;
+  if (input.filaments.length === 0 || input.filaments.some((filament) => !filament.material)) {
+    errors.push({
+      field: 'materialId',
+      message: multiple
+        ? 'Selecione um material cadastrado para cada filamento.'
+        : 'Selecione um material cadastrado.',
+    });
+  }
+  if (input.filaments.some((filament) => filament.material && filament.costPerGram <= 0)) {
     errors.push({
       field: 'materialId',
       message: 'O material selecionado está sem preço ou sem peso de bobina.',
@@ -241,11 +296,10 @@ function validate(input, material, printer, raw) {
  */
 export function calculatePricing(raw = {}, context = {}) {
   const base = { ...createEmptyPricingInput(), ...raw };
-  const materialDoc = context.material || null;
   const printerDoc = context.printer || null;
 
-  const input = normalizeInput(base, materialDoc, printerDoc);
-  const { errors, divisor } = validate(input, materialDoc, printerDoc, base);
+  const input = normalizeInput(base, resolveFilaments(base, context), printerDoc);
+  const { errors, divisor } = validate(input, printerDoc, base);
 
   if (errors.length > 0) {
     return {
@@ -257,6 +311,7 @@ export function calculatePricing(raw = {}, context = {}) {
       batch: null,
       breakdown: [],
       extraItems: [],
+      filamentItems: [],
       formulaPrice: 0,
       suggestedPrice: 0,
       priceOverridden: false,
@@ -267,8 +322,25 @@ export function calculatePricing(raw = {}, context = {}) {
   const { quantity } = input;
 
   // --- Produção, por unidade -------------------------------------------------
+  // Cada filamento é cobrado pelo próprio custo por grama; o desperdício incide
+  // sobre todos (suportes e purga consomem de cada carretel).
+  const filamentCosts = input.filaments.map((filament) => {
+    const filamentBillable = filament.grams * (1 + input.wasteRatio);
+    return {
+      materialId: filament.materialId,
+      materialName: describeFilamentMaterial(filament.material),
+      grams: filament.grams,
+      billableGrams: filamentBillable,
+      exactCents: filamentBillable * filament.costPerGram,
+    };
+  });
   const billableGrams = input.grams * (1 + input.wasteRatio);
-  const material = roundCents(billableGrams * input.costPerGram);
+  // Arredonda só a soma: arredondar filamento a filamento acumularia centavos.
+  const material = roundCents(filamentCosts.reduce((total, item) => total + item.exactCents, 0));
+  const filamentItems = filamentCosts.map(({ exactCents, ...item }) => ({
+    ...item,
+    costCents: roundCents(exactCents),
+  }));
   const energy = energyCostCents(printerDoc, input.printHours, input.energyTariff);
   const depreciation = roundCents(input.printHours * input.depreciationPerHour);
   const maintenance = roundCents(input.printHours * input.maintenancePerHour);
@@ -429,6 +501,7 @@ export function calculatePricing(raw = {}, context = {}) {
     batch,
     breakdown,
     extraItems,
+    filamentItems,
     formulaPrice,
     suggestedPrice,
     effectiveMargin,

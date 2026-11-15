@@ -115,6 +115,31 @@ describe('topMaterials', () => {
     assert.equal(ranking.length, 2);
   });
 
+  it('atribui a cada material as gramas do seu filamento', () => {
+    const ranking = topMaterials([
+      quote({
+        id: 'multi',
+        quantity: 2,
+        materialName: 'PLA Branco + PETG Preto',
+        totals: { ...quote().totals, price: 10000, billableGrams: 200 },
+        filaments: [
+          { materialName: 'PLA Branco', grams: 70, billableGrams: 70 },
+          { materialName: 'PETG Preto', grams: 30, billableGrams: 30 },
+        ],
+      }),
+      quote({ id: 'single', materialName: 'PLA Branco' }),
+    ]);
+
+    const byName = Object.fromEntries(ranking.map((item) => [item.name, item]));
+    assert.equal(byName['PLA Branco'].grams, 240);
+    assert.equal(byName['PLA Branco'].quotes, 2);
+    assert.equal(byName['PETG Preto'].grams, 60);
+    // A receita do orçamento misto é dividida pelo peso, sem contar em dobro.
+    assert.equal(byName['PETG Preto'].revenueCents, 3000);
+    assert.equal(byName['PLA Branco'].revenueCents, 7000 + 10000);
+    assert.ok(!byName['PLA Branco + PETG Preto']);
+  });
+
   it('respeita o limite pedido', () => {
     const many = Array.from({ length: 8 }, (_, index) =>
       quote({ id: `q-${index}`, materialName: `Material ${index}` }),

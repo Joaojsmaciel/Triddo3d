@@ -32,6 +32,20 @@ export function createExtra(label = '', amount = '', perUnit = true) {
   return { key: `extra-${Date.now()}-${extraSequence}`, label, amount, perUnit };
 }
 
+let filamentSequence = 0;
+/** Uma linha de filamento do formulário: material e peso em gramas (texto). */
+export function createFilament(materialId = '', grams = '') {
+  filamentSequence += 1;
+  return { key: `fil-${Date.now()}-${filamentSequence}`, materialId, grams };
+}
+
+/** Medidas da peça, em milímetros. Só informativas: não entram no cálculo. */
+export const DIMENSION_FIELDS = [
+  { key: 'heightMm', label: 'Altura' },
+  { key: 'widthMm', label: 'Largura' },
+  { key: 'thicknessMm', label: 'Espessura' },
+];
+
 /** Estado inicial do formulário, herdando os padrões de Configurações. */
 export function createFormState(settings, { material, printer } = {}) {
   return {
@@ -40,10 +54,14 @@ export function createFormState(settings, { material, printer } = {}) {
     quantity: '1',
     basis: BASIS.UNIT,
 
-    materialId: material?.id || '',
     printerId: printer?.id || '',
 
-    grams: '',
+    filaments: [createFilament(material?.id || '')],
+
+    heightMm: '',
+    widthMm: '',
+    thicknessMm: '',
+
     printHours: '',
     wasteMode: settings.wasteMode || WASTE_MODE.ADD,
     wastePercent: numberToInput(settings.wastePercent),
@@ -79,7 +97,27 @@ export function formStateFromQuote(quote, settings) {
   if (!quote?.input) {
     return { ...base, projectName: quote?.projectName || '', clientName: quote?.clientName || '' };
   }
-  return { ...base, ...quote.input };
+
+  const { materialId, grams, ...input } = quote.input;
+  const restored = { ...base, ...input };
+
+  // Orçamentos salvos antes dos múltiplos filamentos guardavam um único
+  // material e um único peso: viram a primeira (e única) linha.
+  if (!Array.isArray(input.filaments) || input.filaments.length === 0) {
+    restored.filaments = [createFilament(materialId || quote.materialId || '', grams ?? '')];
+  } else {
+    restored.filaments = input.filaments.map((filament) =>
+      filament?.key ? { ...filament } : createFilament(filament?.materialId || '', filament?.grams ?? ''),
+    );
+  }
+  return restored;
+}
+
+/** Medidas da peça em milímetros; ausentes ficam de fora. */
+export function toDimensions(form) {
+  return Object.fromEntries(
+    DIMENSION_FIELDS.map(({ key }) => [key, inputToNumber(form[key])]).filter(([, value]) => value > 0),
+  );
 }
 
 /**
@@ -94,10 +132,13 @@ export function toPricingInput(form, settings, mode = PRICING_MODE.FULL) {
     quantity: inputToNumber(form.quantity, 1) || 1,
     basis: form.basis,
 
-    materialId: form.materialId,
     printerId: form.printerId,
 
-    grams: inputToNumber(form.grams),
+    filaments: (form.filaments || []).map((filament) => ({
+      materialId: filament.materialId,
+      grams: inputToNumber(filament.grams),
+    })),
+
     printHours: parseHours(form.printHours, 0),
     wasteMode: form.wasteMode,
     wastePercent: inputToNumber(form.wastePercent),
@@ -136,7 +177,7 @@ export function toPricingInput(form, settings, mode = PRICING_MODE.FULL) {
 }
 
 /** Monta o orçamento a ser gravado a partir do formulário e do resultado. */
-export function buildQuote({ form, result, mode, material, printer, code, status, existing }) {
+export function buildQuote({ form, result, mode, printer, code, status, existing }) {
   const pick = (source, keys) =>
     Object.fromEntries(keys.map((key) => [key, Number(source[key]) || 0]));
 
@@ -168,6 +209,13 @@ export function buildQuote({ form, result, mode, material, printer, code, status
     'laborHours',
   ];
 
+  const filaments = (result.filamentItems || []).map((item) => ({
+    materialId: item.materialId,
+    materialName: item.materialName,
+    grams: Number(item.grams) || 0,
+    billableGrams: Number(item.billableGrams) || 0,
+  }));
+
   return {
     id: existing?.id,
     code,
@@ -176,8 +224,14 @@ export function buildQuote({ form, result, mode, material, printer, code, status
     status,
     quantity: result.quantity,
 
-    materialId: material?.id || '',
-    materialName: material ? [material.brand, material.name].filter(Boolean).join(' ') : '',
+    // Primeiro filamento e nomes somados: mantêm listagem, busca e relatórios
+    // antigos funcionando. O detalhe por filamento fica em `filaments`.
+    materialId: filaments[0]?.materialId || '',
+    materialName: [...new Set(filaments.map((item) => item.materialName).filter(Boolean))].join(' + '),
+    /** Filamentos por peça: material, peso informado e peso cobrado. */
+    filaments,
+    /** Medidas da peça em mm, para as especificações do orçamento do cliente. */
+    dimensions: toDimensions(form),
     printerId: printer?.id || '',
     printerName: printer ? [printer.brand, printer.model].filter(Boolean).join(' ') : '',
 

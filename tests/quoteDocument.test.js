@@ -398,3 +398,63 @@ describe('buildQuoteHtml · especificações técnicas', () => {
     assert.match(html, /@page \{ size: A4/);
   });
 });
+
+describe('buildQuoteHtml · filamentos e dimensões', () => {
+  const multi = {
+    ...quote,
+    materialName: 'Genérico PLA Branco + Voolt PETG Preto',
+    filaments: [
+      { materialId: 'a', materialName: 'Genérico PLA Branco', grams: 60, billableGrams: 60 },
+      { materialId: 'b', materialName: 'Voolt PETG Preto', grams: 40, billableGrams: 40 },
+    ],
+    dimensions: { heightMm: 120, widthMm: 80.5, thicknessMm: 2.25 },
+  };
+
+  it('lista cada filamento com o peso por peça', () => {
+    const markup = buildQuoteHtml(multi, company);
+    assert.match(markup, /Filamento · Genérico PLA Branco<\/span><span>60,0 g/);
+    assert.match(markup, /Filamento · Voolt PETG Preto<\/span><span>40,0 g/);
+    assert.ok(!/<span>Material<\/span>/.test(markup));
+  });
+
+  it('mantém a linha de material quando há um único filamento', () => {
+    const markup = buildQuoteHtml({ ...multi, filaments: [multi.filaments[0]] }, company);
+    assert.match(markup, /<span>Material<\/span>/);
+    assert.ok(!/Filamento · /.test(markup));
+  });
+
+  it('mostra altura, largura e espessura em mm', () => {
+    const markup = buildQuoteHtml(multi, company);
+    assert.match(markup, /Altura<\/span><span>120 mm/);
+    assert.match(markup, /Largura<\/span><span>80,5 mm/);
+    assert.match(markup, /Espessura<\/span><span>2,25 mm/);
+  });
+
+  it('omite dimensões não informadas', () => {
+    const markup = buildQuoteHtml({ ...multi, dimensions: { heightMm: 50 } }, company);
+    assert.match(markup, /Altura/);
+    assert.ok(!/Largura/.test(markup));
+    assert.ok(!/Espessura/.test(markup));
+    assert.ok(!/ mm</.test(buildQuoteHtml(quote, company)));
+  });
+
+  it('escapa o nome do filamento', () => {
+    const markup = buildQuoteHtml(
+      {
+        ...multi,
+        filaments: [
+          { materialName: '<img onerror=x>', grams: 10, billableGrams: 10 },
+          { materialName: 'PLA', grams: 10, billableGrams: 10 },
+        ],
+      },
+      company,
+    );
+    assert.ok(!markup.includes('<img onerror=x>'));
+  });
+
+  it('esconde filamentos e dimensões com as especificações desligadas', () => {
+    const markup = buildQuoteHtml(multi, { ...company, quoteShowSpecs: false });
+    assert.ok(!/Filamento · /.test(markup));
+    assert.ok(!/Altura/.test(markup));
+  });
+});
