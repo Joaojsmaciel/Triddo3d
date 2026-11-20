@@ -20,7 +20,7 @@ service cloud.firestore {
       return value is number && value >= 0;
     }
 
-    // Formato aceito para um material (ver src/features/materials/cloudSync.js).
+    // Formato aceito para um material (ver src/data/cloudSync.js).
     function isValidMaterial(materialId) {
       let data = request.resource.data;
       return data.keys().hasOnly([
