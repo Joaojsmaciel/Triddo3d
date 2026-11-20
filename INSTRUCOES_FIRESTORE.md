@@ -3,6 +3,10 @@
 O TRIDDO 3D usa o projeto Firebase **triddo-eeb4d** para:
 
 - **Authentication**: login com conta Google. Sem login, o sistema não abre.
+  **Só `joaogsmaciel@gmail.com` tem acesso.** A lista fica em dois lugares, que precisam
+  andar juntos: `firestore.rules` (proteção real dos dados) e `src/auth/access.js` (a tela
+  desconecta as demais contas). Para liberar outra pessoa, inclua o e-mail nos dois e
+  publique as regras de novo.
 - **Firestore**: todos os dados de cada usuário em `users/{uid}/`:
   `materials`, `printers`, `quotes`, `transactions` e `meta/settings`.
 

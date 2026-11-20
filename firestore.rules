@@ -4,8 +4,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Únicas contas autorizadas (mesma lista de src/auth/access.js).
+    // O e-mail precisa estar verificado — contas Google sempre estão.
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in ['joaogsmaciel@gmail.com'];
     }
 
     function isOwner(userId) {

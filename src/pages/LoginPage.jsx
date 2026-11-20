@@ -17,7 +17,7 @@ function GoogleMark() {
 }
 
 export default function LoginPage() {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, deniedEmail } = useAuth();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -57,6 +57,13 @@ export default function LoginPage() {
               <GoogleMark />
               {busy ? 'Aguardando o Google...' : 'Entrar com o Google'}
             </button>
+
+            {deniedEmail && !error ? (
+              <Callout tone="negative" title="Acesso não autorizado" className="mt-4">
+                A conta {deniedEmail} não tem permissão para usar este sistema. Entre com a conta
+                autorizada.
+              </Callout>
+            ) : null}
 
             {error ? (
               <Callout tone="negative" className="mt-4">
