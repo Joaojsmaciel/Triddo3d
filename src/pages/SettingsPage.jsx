@@ -414,9 +414,9 @@ export default function SettingsPage() {
               />
             </div>
 
-            <Callout tone="warning" className="mt-4">
-              Os dados ficam neste navegador. Limpar o histórico do navegador apaga tudo — exporte um
-              backup periodicamente.
+            <Callout tone="info" className="mt-4">
+              Todos os dados ficam salvos na sua conta Google e aparecem em qualquer navegador. O
+              backup em JSON serve como cópia extra ou para levar os dados a outra conta.
             </Callout>
           </CardBody>
         </Card>
@@ -427,8 +427,8 @@ export default function SettingsPage() {
           <CardBody className="space-y-4">
             <div>
               <p className="mb-2 text-sm text-gray-400">
-                Filamentos cadastrados na versão anterior (Firebase) podem ser trazidos para o novo cadastro
-                de materiais.
+                Filamentos cadastrados na versão anterior (coleção antiga do Firebase) podem ser trazidos
+                para os materiais da sua conta.
               </p>
               <Button variant="outline" icon="upload" onClick={handleFirebaseImport}>
                 Importar filamentos do Firebase
@@ -508,7 +508,7 @@ export default function SettingsPage() {
       <ConfirmDialog
         open={confirmClear}
         title="Apagar todos os dados"
-        message={`Materiais, impressoras, orçamentos e configurações serão apagados deste navegador. Você tem ${state.quotes.length} orçamentos salvos e ${formatCents(
+        message={`Materiais, impressoras, orçamentos, lançamentos e configurações serão apagados da sua conta. Você tem ${state.quotes.length} orçamentos salvos e ${formatCents(
           state.quotes.reduce((sum, quote) => sum + (quote.totals?.price || 0), 0),
         )} em valor registrado. Exporte um backup antes de continuar.`}
         confirmLabel="Apagar tudo"

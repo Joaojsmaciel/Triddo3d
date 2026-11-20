@@ -3,10 +3,11 @@ import Icon from './ui/Icon';
 import { Button, Modal } from './ui/primitives';
 
 /**
- * Instruções para liberar as regras do Firestore.
+ * Instruções para publicar as regras do Firestore.
  *
- * Aparece somente na importação dos filamentos da versão anterior, quando o
- * Firebase recusa a leitura por falta de permissão.
+ * Aparece na importação dos filamentos da versão anterior, quando o Firebase
+ * recusa a leitura por falta de permissão — sinal de que as regras do projeto
+ * ainda não foram publicadas.
  */
 export default function PermissionAlert({ onDismiss }) {
   return (
@@ -14,7 +15,7 @@ export default function PermissionAlert({ onDismiss }) {
       open
       onClose={onDismiss}
       title="Firestore sem permissão de leitura"
-      subtitle="As regras de segurança do projeto estão bloqueando o acesso aos filamentos antigos."
+      subtitle="As regras de segurança publicadas no projeto estão bloqueando o acesso aos filamentos antigos."
       footer={
         <>
           <Button variant="ghost" onClick={onDismiss}>
@@ -32,40 +33,20 @@ export default function PermissionAlert({ onDismiss }) {
         </>
       }
     >
-      <ol className="mb-4 list-inside list-decimal space-y-2 text-sm text-gray-300">
-        <li>
-          Acesse o{' '}
-          <a
-            href="https://console.firebase.google.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-brand-blue hover:underline"
-          >
-            Firebase Console
-          </a>{' '}
-          e selecione o projeto <strong className="text-gray-100">triddo-eeb4d</strong>.
-        </li>
-        <li>
-          Abra <strong className="text-gray-100">Firestore Database → Rules</strong>.
-        </li>
-        <li>Publique as regras abaixo e tente a importação novamente.</li>
-      </ol>
+      <p className="mb-3 text-sm text-gray-300">
+        As regras corretas estão no arquivo <strong className="text-gray-100">firestore.rules</strong> do
+        projeto. Publique-as com o Firebase CLI, na pasta do projeto:
+      </p>
 
       <pre className="overflow-x-auto rounded-lg border border-ink-700 bg-ink-950 p-4 text-xs text-positive">
-        {`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /filaments/{filamentId} {
-      allow read: if true;
-    }
-  }
-}`}
+        {`firebase login
+firebase deploy --only firestore:rules`}
       </pre>
 
       <p className="mt-4 flex items-start gap-2 text-xs text-warning">
         <Icon name="alert" size={14} className="mt-0.5" />
-        Essas regras liberam a leitura pública da coleção. Depois de importar, volte a restringi-las — o
-        TRIDDO 3D passa a guardar os dados neste navegador e não depende mais do Firebase.
+        Essas regras liberam a coleção antiga apenas para leitura de usuários logados, e cada conta só
+        acessa os próprios materiais. Não publique regras com “allow read, write: if true”.
       </p>
     </Modal>
   );

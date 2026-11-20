@@ -214,6 +214,21 @@ export async function clearAll() {
   return getState();
 }
 
+/**
+ * Esvazia os registros deste navegador depois que foram enviados para a conta.
+ * Os dados agora vivem no Firestore; o armazenamento local só serve de origem
+ * para essa migração. Grava listas vazias (e não apaga o registro) para que o
+ * próximo carregamento não recrie os exemplos iniciais.
+ */
+export async function clearLocalData() {
+  const current = load();
+  Object.values(COLLECTIONS).forEach((collection) => {
+    current[collection] = [];
+  });
+  commit();
+  return getState();
+}
+
 /** Ponto de injeção para testes: troca o meio de gravação. */
 export function __setDriver(nextDriver) {
   driver = nextDriver;

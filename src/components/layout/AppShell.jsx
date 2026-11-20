@@ -3,6 +3,7 @@ import Logo from '../brand/Logo';
 import Icon from '../ui/Icon';
 import { Button } from '../ui/primitives';
 import { NAV_ITEMS, ROUTES, buildHash, labelForPath } from '../../router/routes';
+import { useAuth } from '../../auth/AuthProvider';
 
 /**
  * Casca da aplicação: menu lateral fixo no desktop, gaveta no celular e barra
@@ -28,6 +29,38 @@ function NavList({ currentPath, onNavigate }) {
         );
       })}
     </nav>
+  );
+}
+
+/** Conta logada e botão de sair. */
+function UserPanel() {
+  const { user, signOut } = useAuth();
+  if (!user) return null;
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-ink-800 bg-ink-900/60 px-3 py-2">
+      {user.photoURL ? (
+        // `no-referrer`: as fotos do Google recusam requisições com referer de outro site.
+        <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full" />
+      ) : null}
+      <div className="min-w-0 flex-1">
+        {user.displayName ? (
+          <p className="truncate text-xs font-semibold text-gray-200">{user.displayName}</p>
+        ) : null}
+        <p className="truncate text-[11px] text-gray-500" title={user.email || ''}>
+          {user.email}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => signOut()}
+        className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-ink-800 hover:text-gray-100"
+        aria-label="Sair da conta"
+        title="Sair"
+      >
+        <Icon name="logout" size={16} />
+      </button>
+    </div>
   );
 }
 
@@ -70,8 +103,11 @@ export default function AppShell({ currentPath, children }) {
             </Button>
           </a>
           <p className="mt-3 px-1 text-[11px] leading-relaxed text-gray-600">
-            Dados salvos neste navegador. Faça backup em Configurações.
+            Dados salvos na sua conta Google.
           </p>
+          <div className="mt-3">
+            <UserPanel />
+          </div>
         </div>
       </aside>
 
@@ -116,6 +152,9 @@ export default function AppShell({ currentPath, children }) {
             </div>
             <div className="flex-1 overflow-y-auto p-3">
               <NavList currentPath={currentPath} onNavigate={() => setDrawerOpen(false)} />
+            </div>
+            <div className="border-t border-ink-800 p-3">
+              <UserPanel />
             </div>
           </div>
         </div>

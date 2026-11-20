@@ -1,12 +1,74 @@
 rules_version = '2';
+
+// Regras do TRIDDO 3D. Publicar com: firebase deploy --only firestore:rules
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regras para a coleção de filamentos
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isText(value, maxSize) {
+      return value is string && value.size() <= maxSize;
+    }
+
+    function isAmount(value) {
+      return value is number && value >= 0;
+    }
+
+    // Formato aceito para um material (ver src/features/materials/cloudSync.js).
+    function isValidMaterial(materialId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'id', 'brand', 'name', 'type', 'color', 'colorHex', 'spoolGrams',
+          'priceCents', 'shippingCents', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.id == materialId
+        && isText(data.name, 200)
+        && isText(data.brand, 200)
+        && isText(data.type, 50)
+        && isText(data.color, 100)
+        && isText(data.colorHex, 20)
+        && isText(data.notes, 5000)
+        && isAmount(data.spoolGrams)
+        && isAmount(data.priceCents)
+        && isAmount(data.shippingCents)
+        && isText(data.createdAt, 40)
+        && isText(data.updatedAt, 40);
+    }
+
+    // Registros comuns (impressoras, orçamentos, lançamentos): o id do documento
+    // precisa bater com o campo id e as datas precisam existir.
+    function isValidRecord(docId) {
+      let data = request.resource.data;
+      return data.id == docId
+        && isText(data.createdAt, 40)
+        && isText(data.updatedAt, 40);
+    }
+
+    function isValidWrite(collectionName, docId) {
+      return (collectionName == 'materials' && isValidMaterial(docId))
+        || (collectionName in ['printers', 'quotes', 'transactions'] && isValidRecord(docId))
+        || (collectionName == 'meta' && docId == 'settings'
+            && request.resource.data.company is map);
+    }
+
+    // Dados do usuário: cada conta lê e grava somente os próprios, e só nas
+    // coleções conhecidas (src/firebase/userData.js).
+    match /users/{userId}/{collectionName}/{docId} {
+      allow read, delete: if isOwner(userId)
+        && collectionName in ['materials', 'printers', 'quotes', 'transactions', 'meta'];
+      allow create, update: if isOwner(userId) && isValidWrite(collectionName, docId);
+    }
+
+    // Coleção da versão anterior: somente leitura, para a importação em Configurações.
     match /filaments/{filamentId} {
-      // Permitir leitura e escrita para todos (apenas para desenvolvimento)
-      // IMPORTANTE: Para produção, configure autenticação e regras mais restritivas
-      allow read, write: if true;
+      allow read: if signedIn();
+      allow write: if false;
     }
   }
 }
-

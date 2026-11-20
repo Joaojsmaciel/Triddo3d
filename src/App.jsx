@@ -2,6 +2,9 @@ import React from 'react';
 import AppShell from './components/layout/AppShell';
 import { ToastProvider } from './components/ui/Toast';
 import { StoreProvider } from './store/StoreProvider';
+import { AuthProvider, useAuth } from './auth/AuthProvider';
+import LoginPage from './pages/LoginPage';
+import LoadingScreen from './components/ui/LoadingScreen';
 import { ROUTES, useRoute } from './router/routes';
 import DashboardPage from './pages/DashboardPage';
 import PricingPage from './pages/PricingPage';
@@ -52,12 +55,27 @@ function Router() {
   );
 }
 
+/** Só libera o sistema para quem está logado; cada conta tem seus próprios materiais. */
+function AuthGate() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingScreen label="Verificando sua sessão..." />;
+  if (!user) return <LoginPage />;
+
+  return (
+    // `key` recria o store ao trocar de conta, sem sobras do usuário anterior.
+    <StoreProvider key={user.uid} uid={user.uid}>
+      <Router />
+    </StoreProvider>
+  );
+}
+
 export default function App() {
   return (
     <ToastProvider>
-      <StoreProvider>
-        <Router />
-      </StoreProvider>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
     </ToastProvider>
   );
 }
